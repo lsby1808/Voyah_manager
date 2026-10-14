@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QDialogButtonBox, QListWidget, QListWidgetItem, QStyle, QStackedWidget, QFormLayout, QToolButton, QLayout, QWidgetItem, QSizePolicy)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 APP_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 DATA_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Voyah Manager'
@@ -1017,18 +1017,22 @@ class CatalogStore(QObject):
             config = json.loads(main.settings.value('catalog_connection', '{}'))
             self.config = {k:v for k,v in config.items() if k in ('repository','branch','path') and isinstance(v,str)} if isinstance(config,dict) else {}
         except (ValueError,TypeError): self.config = {}
+        if not self.config.get('repository') and BOOTSTRAP_REPOSITORY: self.config = {'repository':BOOTSTRAP_REPOSITORY,'branch':'','path':'catalog.json'}
         self.etag = ''; self.remote_sha = None; self.remote_loaded = False
         try:
             saved = json.loads(self.path.read_text(encoding='utf-8')); self.profile = validate_catalog(saved['profile'])
             if saved.get('connection') == self.config:
                 self.etag = saved.get('etag','') if isinstance(saved.get('etag',''),str) else ''; self.remote_sha = saved.get('sha') if isinstance(saved.get('sha'),str) else None
         except (OSError,ValueError,KeyError,TypeError,AttributeError): pass
-        if not self.config.get('repository') and BOOTSTRAP_REPOSITORY: self.config = {'repository':BOOTSTRAP_REPOSITORY,'branch':'','path':'catalog.json'}
         self.timer = QTimer(self); self.timer.timeout.connect(self.refresh); self.timer.start(300000)
     def endpoint(self):
         repo = github_repository(self.config.get('repository','')); path = self.config.get('path','catalog.json').strip('/')
         if not path or any(p in ('.','..') for p in path.split('/')): raise ValueError('Некорректный путь каталога.')
         return 'https://api.github.com/repos/' + repo + '/contents/' + quote(path, safe='/')
+    def public_endpoint(self):
+        self.endpoint()  # Validate repository and path using the same rules as publication.
+        repo = github_repository(self.config.get('repository','')); branch = self.config.get('branch','') or 'HEAD'
+        return 'https://raw.githubusercontent.com/' + repo + '/' + quote(branch, safe='') + '/' + quote(self.config.get('path','catalog.json').strip('/'), safe='/')
     def apply(self, profile, etag='', sha=None):
         profile = validate_catalog(profile)
         if self.main.busy: self.pending = (profile,etag,sha); return
@@ -1043,7 +1047,7 @@ class CatalogStore(QObject):
         if not self.config.get('repository'):
             self.message = 'Каталог ещё не настроен'; self.changed.emit(); return
         self.loading = True
-        try: url = self.endpoint(); branch = self.config.get('branch',''); url += ('?' + urlencode({'ref':branch})) if branch else ''
+        try: url = self.public_endpoint()
         except ValueError as error: self.loading = False; self.message = str(error); self.changed.emit(); return
         def done(result):
             self.loading = False
@@ -1052,8 +1056,10 @@ class CatalogStore(QObject):
                     self.message = 'Каталог актуален'; self.remote_loaded = True
                 else:
                     if result['error']: raise ValueError(result['error'])
-                    body = json.loads(result['body']); profile = validate_catalog(json.loads(base64.b64decode(body['content'])))
-                    self.remote_sha = body['sha']; self.remote_loaded = True; self.apply(profile,result['etag'],body['sha']); self.message = 'Каталог обновлён'
+                    body = result['body']; profile = validate_catalog(json.loads(body))
+                    # GitHub Contents uses the Git blob SHA, including exact bytes and newlines.
+                    sha = hashlib.sha1(b'blob ' + str(len(body)).encode('ascii') + b'\0' + body).hexdigest()
+                    self.remote_sha = sha; self.remote_loaded = True; self.apply(profile,result['etag'],sha); self.message = 'Каталог обновлён'
             except (ValueError,KeyError,TypeError,OSError) as error: self.message = 'Нет обновления. Используется сохранённый каталог. ' + str(error)
             self.changed.emit()
             if callable(callback): callback(result)
@@ -3249,7 +3255,7 @@ def main():
                 if args.smoke_online:
                     def network_checked(result):
                         tool_checks['https'] = {'ok':not bool(result['error']),'status':result['status'],'error':result['error']}; shots()
-                    window.web.request('https://api.github.com/repos/google/bundletool/releases/latest',network_checked)
+                    window.web.request(window.catalog.public_endpoint(),network_checked)
                 else: shots()
                 return
             name, program, arguments = commands[index]

@@ -100,12 +100,25 @@ def catalog_response(profile,sha='sha1'):
 def test_catalog_refresh_cache_corruption_and_304(window,qtbot):
     profile=v.default_catalog();profile['revision']=12;profile['features']['terminal']=False
     store=window.catalog;store.config={'repository':'owner/repo','path':'catalog.json','branch':''}
-    fake=install_network(window,lambda *a:(catalog_response(profile),200))
+    fake=install_network(window,lambda *a:(profile,200))
     store.refresh();qtbot.waitUntil(lambda:not store.loading,timeout=3000);assert store.profile['revision']==12
     assert json.loads(store.path.read_text())['profile']['features']['terminal'] is False
     fake.handler=lambda *a:(b'bad json',200);store.refresh();qtbot.waitUntil(lambda:not store.loading);assert store.profile['revision']==12
     fake.handler=lambda *a:(b'',304);store.refresh();qtbot.waitUntil(lambda:not store.loading);assert store.profile['revision']==12
     assert bytes(fake.requests[-1][3].rawHeader('If-None-Match'))==b'"revision"'
+
+
+@pytest.mark.parametrize('branch,encoded',[('', 'HEAD'),('release/v2','release%2Fv2')])
+def test_public_catalog_avoids_api_quota_and_preserves_exact_blob_sha(window,qtbot,branch,encoded):
+    store=window.catalog;store.config={'repository':'owner/repo','path':'folder/catalog.json','branch':branch}
+    profile=v.default_catalog();profile['revision']=5
+    body=(json.dumps(profile,ensure_ascii=False,indent=2)+'\r\n').encode()
+    fake=install_network(window,lambda *a:(body,200))
+    store.refresh();qtbot.waitUntil(lambda:not store.loading,timeout=3000)
+    assert store.remote_loaded and store.profile['revision']==5
+    assert fake.requests[0][1]==f'https://raw.githubusercontent.com/owner/repo/{encoded}/folder/catalog.json'
+    assert store.remote_sha==hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest()
+    assert not bytes(fake.requests[0][3].rawHeader('Authorization'))
 
 
 @pytest.mark.parametrize('status',[401,403,404,409])

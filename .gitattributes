@@ -1,0 +1,2 @@
+# Preserve the exact application bytes used by build_manifest source SHA-256.
+voyah_manager.py -text
