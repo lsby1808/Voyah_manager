@@ -37,7 +37,7 @@ from typing import Callable
 
 from PySide6.QtCore import (Qt, QObject, Signal, QProcess, QTimer, QThreadPool,
                             QRunnable, QSettings, QUrl, QSize, QRect, QPoint, QPointF, QRectF, QEvent,
-                            QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QVariantAnimation)
+                            QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QVariantAnimation, QProcessEnvironment)
 from PySide6.QtGui import (QFont, QIcon, QPainter, QColor, QPixmap, QDesktopServices,
                            QTextCursor, QKeySequence, QShortcut, QPen, QPalette, QPainterPath, QRegion, QAction)
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -1776,7 +1776,12 @@ class MainWindow(QMainWindow):
 
     def launch_application(self, args):
         command=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
-        started=QProcess.startDetached(sys.executable,command+args,str(APP_DIR))
+        process=QProcess(self); process.setProgram(sys.executable); process.setArguments(command+args); process.setWorkingDirectory(str(APP_DIR))
+        environment=QProcessEnvironment.systemEnvironment()
+        environment.insert('PYINSTALLER_RESET_ENVIRONMENT','1')
+        process.setProcessEnvironment(environment)
+        started=process.startDetached()
+        process.deleteLater()
         return bool(started[0] if isinstance(started,tuple) else started)
 
     def set_demo_mode(self, enabled):

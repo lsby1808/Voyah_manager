@@ -1,6 +1,7 @@
 """Engineering date boundaries, local demo switching and automatic APK planning."""
 from datetime import date, datetime, timezone
 from pathlib import Path
+import json,os
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, QSettings
@@ -82,6 +83,15 @@ def test_saved_demo_mode_never_routes_to_real_adb(qtbot,monkeypatch,tmp_path):
     admin=v.AdminDialog(win);qtbot.addWidget(admin)
     assert admin.demo_check.isChecked() and 'runtime/demo_enabled' not in admin.collect()
     admin.reject();win.close();qtbot.wait(50)
+
+def test_restart_uses_an_independent_detached_process_environment(qtbot,monkeypatch,tmp_path):
+    marker=tmp_path/'restart-result.json';before=os.environ.get('PYINSTALLER_RESET_ENVIRONMENT')
+    monkeypatch.setattr(v.sys,'frozen',True,raising=False);monkeypatch.setattr(v,'APP_DIR',tmp_path)
+    code="import os,json,time;from pathlib import Path;time.sleep(.15);Path("+repr(str(marker))+").write_text(json.dumps({'reset':os.environ.get('PYINSTALLER_RESET_ENVIRONMENT'),'cwd':str(Path.cwd())}))"
+    assert v.MainWindow.launch_application(None,['-c',code])
+    qtbot.waitUntil(marker.exists,timeout=5000)
+    data=json.loads(marker.read_text());assert data=={'reset':'1','cwd':str(tmp_path)}
+    assert os.environ.get('PYINSTALLER_RESET_ENVIRONMENT')==before
 
 def apk(path,pkg='com.test.one',version='1',split=''):
     return v.ApkInfo(Path(path),pkg,version,28,split)

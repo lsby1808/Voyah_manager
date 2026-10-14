@@ -25,7 +25,11 @@ for name,dpr,api in [('100',1.0,30),('125',1.25,30),('150',1.5,30),('offline',1.
 suite=ET.parse(root/('qa-'+series+'-tests.xml')).find('testsuite')
 count=int(suite.get('tests'))
 assert count>=124 and suite.get('failures')=='0' and suite.get('errors')=='0'
-count=len({(case.get('classname'),case.get('name')) for case in suite.findall('testcase')})
+reports=[suite]
+extra=root/('qa-'+series+'-final-new.xml')
+if extra.exists():
+    extra_suite=ET.parse(extra).find('testsuite');assert extra_suite.get('failures')==extra_suite.get('errors')=='0';reports.append(extra_suite)
+count=len({(case.get('classname'),case.get('name')) for report in reports for case in report.findall('testcase')})
 publication_path=root/('qa-'+series+'-publication.json')
 publication=json.loads(publication_path.read_text()) if publication_path.exists() else {}
 manifest={'version':version,'file':executable.name,'size_bytes':executable.stat().st_size,
