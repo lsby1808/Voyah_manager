@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QDialogButtonBox, QListWidget, QListWidgetItem, QStyle, QStackedWidget, QFormLayout, QToolButton, QLayout, QWidgetItem, QSizePolicy, QStyleOptionButton, QGraphicsOpacityEffect)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-VERSION = '2.1.0'
+VERSION = '2.1.1'
 APP_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 DATA_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Voyah Manager'
@@ -516,8 +516,9 @@ QComboBox::drop-down { border: 0; width: 28px; }
 QComboBox::down-arrow { image: none; border: 0; width: 0; height: 0; }
 QComboBox QAbstractItemView { background: #232A34; color: #EDF2F7; selection-background-color: #164F60; border: 1px solid #48556A; border-radius: 12px; padding: 8px; outline: 0; }
 QComboBox QAbstractItemView::item { min-height: 44px; padding: 0 12px; border-radius: 12px; }
-QTabWidget::pane { border: 0; padding-top: 16px; }
-QTabBar::tab { background: #1C1F26; color: #B3BECD; padding: 12px 16px; border-radius: 12px; margin-right: 8px; }
+QTabWidget::pane { border: 0; padding-top: 16px; background: transparent; }
+QTabBar { qproperty-drawBase: false; background: transparent; border: 0; padding: 0; margin: 0; }
+QTabBar::tab { background: #1C1F26; color: #B3BECD; border: 0; padding: 12px 16px; border-radius: 12px; margin: 0 8px 0 0; }
 QTabBar::tab:selected { color: #A1EDFD; background: #203842; }
 QTabBar::tab:hover { background: #28313D; }
 QPlainTextEdit { background: #10151B; border: 1px solid #303846; border-radius: 12px; padding: 12px; font-family: Consolas; font-size: 10pt; selection-background-color: #126078; }
@@ -814,9 +815,15 @@ class ResponsiveGrid(QWidget):
 class EmptyState(QFrame):
     def __init__(self,title,description,icon='info',parent=None):
         super().__init__(parent); self.setObjectName('card'); row=QVBoxLayout(self); row.setContentsMargins(24,24,24,24); row.setSpacing(12)
-        emblem=QLabel(); emblem.setPixmap(ui_icon(icon,UiTokens.accent,32).pixmap(32,32)); row.addWidget(emblem)
+        row.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Minimum)
+        self.emblem=QLabel(); self.emblem.setObjectName('emptyStateIcon'); self.emblem.setFixedSize(36,36)
+        self.emblem.setAlignment(Qt.AlignmentFlag.AlignCenter); self.emblem.setPixmap(ui_icon(icon,UiTokens.accent,32).pixmap(32,32))
+        row.addWidget(self.emblem,0,Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignTop)
         self.title=QLabel(title); self.title.setObjectName('section'); self.title.setWordWrap(True); row.addWidget(self.title)
         self.description=QLabel(description); self.description.setObjectName('hint'); self.description.setWordWrap(True); row.addWidget(self.description)
+        self.title.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Minimum)
+        self.description.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Minimum)
 
 
 class Disclosure(QFrame):
@@ -1511,6 +1518,13 @@ class Step:
     timeout: int = 30000
     validate: Callable | None = None
 
+EN.update({
+    'Встроенное средство связи': 'Built-in connection tool',
+    'Готовим встроенное средство связи…': 'Preparing the built-in connection tool…',
+    'Встроенное средство связи недоступно': 'The built-in connection tool is unavailable',
+    'Не удалось подготовить встроенное средство связи. Перезапустите программу. Если ошибка повторится, скачайте полную сборку заново.': 'The built-in connection tool could not be prepared. Restart the app. If the problem continues, download the complete app again.',
+})
+
 class MainWindow(QMainWindow):
     def __init__(self, demo=False, smoke=False):
         super().__init__(); self.demo = demo; self.smoke = smoke; self.closing = False
@@ -1522,7 +1536,7 @@ class MainWindow(QMainWindow):
         self.binding = []; self.devices = []; self.probing = False; self.operation_name = ''
         self.display_map = self.settings.value('display_map', {'cluster': 0, 'center': 1, 'passenger': 2})
         if isinstance(self.display_map, str): self.display_map = json.loads(self.display_map)
-        self.adb_path = self.tools.find_adb(self.settings.value('adb_path', ''))
+        self.adb_path = ''; self.adb_preparing = False; self.adb_error = ''
         self.setWindowTitle('Voyah Manager'); self.setWindowIcon(make_icon()); self.resize(1400, 940); self.setMinimumSize(820, 620); self.setAcceptDrops(True)
         self.web = WebClient(self); self.catalog = CatalogStore(self); self.admin_dialog = None; self.recipe = None
         self.motion=MotionController(self); self.build_ui(); self.retranslate(); self.catalog.changed.connect(self.apply_policy)
@@ -1568,9 +1582,6 @@ class MainWindow(QMainWindow):
         self.connection_toggle=self.button('Настройки подключения и устройства',lambda:self.connection_disclosure.setExpanded(not self.connection_disclosure.expanded),icon='settings')
         self.connection_toggle.setText(''); self.connection_toggle.setFixedSize(44,44); row.addWidget(self.connection_toggle)
         self.nav_buttons=[]
-        for key,code,icon in [('Назад',4,'back'),('Домой',3,'home'),('Недавние',187,'recents')]:
-            button=self.button(key,lambda checked=False,c=code:self.keyevent(c),icon=icon); button.setProperty('icon_only',True); button.setText(''); button.setFixedSize(36,36); button.setMinimumHeight(36); row.addWidget(button); self.nav_buttons.append(button)
-        shot=self.button('Скриншот',self.screenshot,icon='camera'); shot.setProperty('icon_only',True); shot.setText(''); shot.setFixedSize(36,36); shot.setMinimumHeight(36); row.addWidget(shot); self.nav_buttons.append(shot)
         self.language=QComboBox(); self.language.addItem('Русский','ru'); self.language.addItem('English','en'); self.language.setCurrentIndex(1 if self.lang=='en' else 0); self.language.setMinimumContentsLength(6); self.language.setFixedWidth(120); self.language.currentIndexChanged.connect(self.change_language); row.addWidget(self.language)
         h.addLayout(row)
         self.connection_disclosure=Disclosure('',self); self.connection_disclosure.toggle.hide(); self.connection_details=self.connection_disclosure.content
@@ -1581,7 +1592,7 @@ class MainWindow(QMainWindow):
         self.voyah_wifi=self.button('Voyah :5578',lambda:self.ip.setText('192.168.43.1:5578'),help_key='Подставляет адрес из отчёта установщика. Подходит только для прошивок с таким способом подключения.')
         self.wifi_row=QWidget(); address=QHBoxLayout(self.wifi_row); address.setContentsMargins(0,0,0,0); address.addWidget(self.ip,1); address.addWidget(self.voyah_wifi); details.addWidget(self.wifi_row)
         self.device_info=QLabel(); self.device_info.setObjectName('subtitle'); self.device_info.setWordWrap(True); details.addWidget(self.device_info)
-        tools_row=FlowLayout(); tools_row.addWidget(self.button('USB → Wi-Fi :5555',self.usb_wifi,icon='wifi')); tools_row.addWidget(self.button('Выбрать ADB',self.choose_adb,icon='folder')); tools_row.addWidget(self.button('Встроенный ADB',self.use_bundled,icon='archive')); tools_row.addWidget(self.button('Перезапуск ADB',self.restart_adb,icon='refresh')); details.addLayout(tools_row)
+        tools_row=FlowLayout(); tools_row.addWidget(self.button('USB → Wi-Fi :5555',self.usb_wifi,icon='wifi')); tools_row.addWidget(self.button('Перезапуск ADB',self.restart_adb,icon='refresh')); details.addLayout(tools_row)
         self.adb_label=QLabel(); self.adb_label.setObjectName('subtitle'); self.adb_label.setWordWrap(True); self.adb_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); details.addWidget(self.adb_label)
         access=FlowLayout(); self.root_button=self.button('Расширенный режим',self.root_menu,icon='shield'); access.addWidget(self.root_button); self.reboot_button=self.button('Перезагрузка',self.reboot_menu,icon='recovery'); access.addWidget(self.reboot_button)
         self.reduce_motion=self.bind(QCheckBox(),'Уменьшить анимацию'); self.reduce_motion.setChecked(self.motion.reduced); self.reduce_motion.toggled.connect(self.motion.set_reduced); self.reduce_motion.setProperty('help_key','Убирает плавные переходы и раскрытие меню. Все действия остаются доступными.'); access.addWidget(self.reduce_motion); details.addLayout(access)
@@ -1601,7 +1612,7 @@ class MainWindow(QMainWindow):
                 if hasattr(page,'log'):
                     page.layout.removeWidget(page.log); page.log.hide()
                 item=QListWidgetItem(ui_icon(icons[key]),self.t(SECTION_NAMES[key])); item.setData(Qt.ItemDataRole.UserRole,key); item.setToolTip(self.t(SECTION_HELP[key])); self.sidebar.addItem(item); self.section_items[key]=item
-                if key in ('files','apps','terminal'): container=page
+                if key in ('installer','files','apps','terminal'): container=page
                 else:
                     container=QScrollArea(); container.setWidgetResizable(True); container.setFrameShape(QFrame.Shape.NoFrame); container.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); container.setWidget(page)
                 container.setProperty('section',key); self.section_indices[key]=self.stack.addWidget(container)
@@ -1693,9 +1704,7 @@ class MainWindow(QMainWindow):
         self.notice(self.t('Подключите ГУ по USB или Wi-Fi, чтобы начать.'))
         QTimer.singleShot(0, self.catalog.refresh)
         if (DATA_DIR / 'operation.json').exists(): self.notice(self.t('Обнаружена незавершённая системная операция. Откройте журнал восстановления.'))
-        if not self.adb_path and not self.demo:
-            self.use_bundled()
-        else: self.refresh_devices()
+        self.use_bundled()
 
     def retranslate(self):
         for obj,key,method in self.binding:
@@ -1715,7 +1724,7 @@ class MainWindow(QMainWindow):
             item.setText('' if compact else self.t(SECTION_NAMES[key])); item.setSizeHint(QSize(44 if compact else 206,52 if compact or key!='apps' else 68))
         for item,key in self.group_items: item.setText('' if compact else self.t(key))
         self.about_button.setText('' if compact else self.t('О приложении'))
-        self.apply_policy(); self.update_status(); self.adb_label.setText('ADB  ·  '+(self.adb_path or '—'))
+        self.apply_policy(); self.update_status()
 
     def change_language(self):
         self.lang = self.language.currentData(); self.settings.setValue('language', self.lang); self.retranslate()
@@ -1882,25 +1891,32 @@ class MainWindow(QMainWindow):
         self.status_dot.setStyleSheet(f'color:{color};font-size:18pt;')
         suffix = ('  ' + ('USB [-d]' if self.target.use_d else f'{self.target.mode.upper()} [-s {self.target.serial}]')) if self.target else ''
         self.connection_status.setText(self.t(key)); self.vehicle_label.setText(self.target.serial if self.target else self.t('Ваш автомобиль'));  self.connection_status.setToolTip(self.t(key) + suffix)
-        self.adb_label.setText('ADB  ·  ' + (self.adb_path or '—'))
+        self.adb_label.setText(self.t('Готовим встроенное средство связи…' if self.adb_preparing else 'Встроенное средство связи недоступно' if self.adb_error else 'Встроенное средство связи'))
 
     def choose_adb(self):
-        if self.busy: return
-        file, _ = QFileDialog.getOpenFileName(self, self.t('Выбрать ADB'), self.adb_path, 'ADB (adb.exe)')
-        if file:
-            self.set_target(None); self.adb_path = file; self.settings.setValue('adb_path', file); self.refresh_devices(); self.update_status()
+        # Compatibility entry point: external ADB selection is no longer supported.
+        self.use_bundled()
 
     def use_bundled(self):
-        if self.busy: return
+        if self.closing or self.adb_preparing or self.busy: return
+        if self.adb_path:
+            self.update_status(); return
         if not self.begin(self.t('Встроенный ADB')): return
+        self.adb_preparing = True; self.adb_error = ''; self.update_status()
         def done(path, error):
-            self.end(not error)
-            if error: self.error(str(error)); return
-            self.set_target(None); self.adb_path = path; self.settings.setValue('adb_path', path); self.update_status(); self.refresh_devices()
+            self.adb_preparing = False
+            if error or not path:
+                self.adb_path = ''; self.adb_error = str(error or 'Bundled ADB path is empty')
+                self.set_target(None); self.end(False); self.update_status()
+                self.error(self.t('Не удалось подготовить встроенное средство связи. Перезапустите программу. Если ошибка повторится, скачайте полную сборку заново.'), self.adb_error); return
+            self.adb_path = str(path); self.adb_error = ''
+            self.set_target(None); self.end(True); self.update_status(); self.refresh_devices()
         self.background(self.tools.bundled_adb, done)
 
     def connect_device(self):
         if self.busy: return
+        if not self.adb_path:
+            self.use_bundled(); return
         if self.mode.currentData() == 'wifi':
             try: endpoint = normalize_endpoint(self.ip.text())
             except ValueError: self.error(self.t('Введите корректный IP-адрес и порт.')); return
@@ -2624,118 +2640,208 @@ def validate_apks(infos: list[ApkInfo], api=0):
     if len(splits) != len(infos): raise ValueError('Duplicate split names')
     if api and any(i.min_sdk > api for i in infos): raise ValueError('Приложение требует более новую версию Android (minSdk выше API ГУ).')
 
+EN.update({'APK и архивы приложений. Добавленные файлы сразу появятся ниже.': 'APK files and app archives. Added files appear below immediately.', 'Уберёт все файлы из очереди. Файлы на компьютере останутся.': 'Clears the queue. Files on your computer will remain.', 'Сохранить данные': 'Keep app data', 'Выдать разрешения': 'Grant permissions', 'Разные приложения установятся по очереди.': 'Different apps are installed one at a time.', 'Все части одного приложения устанавливаются вместе.': 'All parts of one app are installed together.', 'Уберёт этот файл из очереди. Файл на компьютере останется.': 'Removes this file from the queue. The file on your computer will remain.', 'Убрать файл из списка': 'Remove file from list', 'Читаем выбранную папку…': 'Reading the selected folder…', 'Не удалось прочитать папку. Выберите файлы вручную.': 'Could not read the folder. Select files manually.', 'Добавлено: {added} · Уже в списке: {duplicates}': 'Added: {added} · Already listed: {duplicates}', 'Эти файлы уже в списке. Повторно не добавлены.': 'These files are already listed. No duplicates added.', 'Подходящие файлы не найдены. Выберите APK или архив приложения.': 'No supported files found. Choose an APK or app archive.', 'Добавлено: {added} · Пропущено: {rejected}': 'Added: {added} · Skipped: {rejected}', 'Убрано из списка: {count}': 'Removed from list: {count}'})
+
 class InstallerPage(Page):
+    """A single workspace: drop, review the queue, then install."""
 
     class DropArea(QFrame):
         paths_dropped = Signal(object)
         def __init__(self, page):
             super().__init__(page); self.page = page; self.setAcceptDrops(True); self.setObjectName('dropZone')
-            self.setMinimumHeight(168); layout = QVBoxLayout(self); layout.setContentsMargins(24, 24, 24, 24); layout.setSpacing(12)
-            image = QLabel(); image.setPixmap(ui_icon('apk', size=32).pixmap(32, 32)); image.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(image)
-            heading = page.label('Перетащите файлы приложения сюда', 'section'); heading.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(heading)
-            caption = page.hint('Подойдут APK и готовые комплекты приложений. Можно выбрать несколько файлов или целую папку.'); caption.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(caption)
+            self.setMinimumHeight(60); self.setMaximumHeight(72)
+            layout = QHBoxLayout(self); layout.setContentsMargins(16, 6, 16, 6); layout.setSpacing(12)
+            image = QLabel(); image.setPixmap(ui_icon('apk', size=28).pixmap(28, 28)); image.setFixedSize(32, 32); layout.addWidget(image)
+            text = QVBoxLayout(); text.setSpacing(2)
+            text.addWidget(page.label('Перетащите файлы приложения сюда', 'section'))
+            self.caption = page.hint('APK и архивы приложений. Добавленные файлы сразу появятся ниже.'); text.addWidget(self.caption)
+            layout.addLayout(text, 1)
         def dragEnterEvent(self, event):
-            if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()) and not self.page.main.busy and self.page.main.allowed('apk.install', False):
+            if self.page.editable() and any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()):
                 self.setProperty('dragActive', True); self.style().unpolish(self); self.style().polish(self); event.acceptProposedAction()
         def dragLeaveEvent(self, event):
             self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
         def dropEvent(self, event):
-            self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
+            self.dragLeaveEvent(event)
+            if not self.page.editable(): event.ignore(); return
             self.paths_dropped.emit([url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile() and url.toLocalFile()]); event.acceptProposedAction()
 
     def __init__(self, main):
-        super().__init__(main); self.setAcceptDrops(True); self.files = []; self.service = InstallService(main); self.cancel_event = self.service.cancel_event
-        card = self.card('Приложения с компьютера', 'Выберите файлы, проверьте список и установите их в автомобиль.')
-        self.drop_area = self.DropArea(self); self.drop_area.paths_dropped.connect(self.add_paths); card.addWidget(self.drop_area)
-        self.drop_hint = self.drop_area.findChildren(QLabel)[-1]
-        self.add_button = self.button('Выбрать файлы', self.add_files, True, icon='add', help_key='Выберите один APK, несколько приложений или готовый комплект из файлов.')
+        super().__init__(main); self.setAcceptDrops(True); self.files = []; self.scan_generation = 0
+        self.feedback_key = ''; self.feedback_values = {}; self.feedback_kind = ''
+        self.service = InstallService(main); self.cancel_event = self.service.cancel_event
+        frame = SurfaceCard(); self.layout.addWidget(frame, 1)
+        card = QVBoxLayout(frame); card.setContentsMargins(16, 10, 16, 10); card.setSpacing(6)
+        self.drop_area = self.DropArea(self); self.drop_area.paths_dropped.connect(self.add_paths); self.drop_hint = self.drop_area.caption; card.addWidget(self.drop_area)
+        self.add_button = self.button('Выбрать файлы', self.add_files, icon='add', help_key='Выберите один APK, несколько приложений или готовый комплект из файлов.')
         self.folder_button = self.button('Выбрать папку', self.add_folder, icon='folder', help_key='Добавит все APK из выбранной папки. Каждое приложение установится по очереди.')
-        self.row(card, self.add_button, self.folder_button)
         self.mode = QComboBox(); self.mode_keys = ['Одно приложение', 'Несколько приложений', 'Комплект одного приложения']; self.mode.addItems([self.t(k) for k in self.mode_keys])
-        self.mode.setProperty('feature', 'apk.install'); self.bind(self.mode, 'Укажите, устанавливаете вы один файл, разные приложения или части одного приложения.', 'setToolTip')
-        options = QHBoxLayout(); options.setSpacing(12); options.addWidget(self.label('Как установить')); options.addWidget(self.mode, 1); card.addLayout(options)
-        self.mode_hint = self.hint('Один APK — одно приложение.'); card.addWidget(self.mode_hint); self.mode.currentIndexChanged.connect(self.update_mode_hint)
-        queue = self.card('Выбранные файлы')
-        self.queue_summary = QLabel(); self.queue_summary.setObjectName('subtitle'); queue.addWidget(self.queue_summary)
-        self.file_table = table([self.t('Файл'), self.t('Размер'), self.t('Статус')]); self.file_table.setMinimumHeight(176); self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.file_table.horizontalHeader().setMinimumSectionSize(90); queue.addWidget(self.file_table)
-        self.empty_queue = EmptyState(self.t('Файлы ещё не выбраны'), self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».'), icon='apk'); queue.addWidget(self.empty_queue)
-        self.clear_button = self.button('Очистить список', self.clear_files, icon='delete', help_key='Уберёт выбранные файлы из списка. Файлы на компьютере останутся.')
-        self.row(queue, self.clear_button)
-        settings = self.card('Параметры установки', 'Обычные параметры уже выбраны. Меняйте их только при необходимости.')
+        self.mode.setProperty('feature', 'apk.install'); self.mode.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.bind(self.mode, 'Укажите, устанавливаете вы один файл, разные приложения или части одного приложения.', 'setToolTip')
+        controls = QHBoxLayout(); controls.setSpacing(8); controls.addWidget(self.add_button); controls.addWidget(self.folder_button); controls.addWidget(self.mode, 1); card.addLayout(controls)
+        summary = QHBoxLayout(); summary.setSpacing(8)
+        self.queue_summary = QLabel(); self.queue_summary.setObjectName('subtitle'); summary.addWidget(self.queue_summary)
+        self.queue_feedback = QLabel(); self.queue_feedback.setWordWrap(True); summary.addWidget(self.queue_feedback, 1)
+        self.clear_button = QPushButton(); self.clear_button.setIcon(ui_icon('delete')); self.clear_button.setFixedSize(44, 44)
+        self.clear_button.setProperty('feature', 'apk.install'); self.bind(self.clear_button, 'Очистить список', 'setAccessibleName')
+        self.bind(self.clear_button, 'Уберёт все файлы из очереди. Файлы на компьютере останутся.', 'setToolTip')
+        self.clear_button.clicked.connect(self.clear_files); controls.addWidget(self.clear_button); card.addLayout(summary)
+        self.file_table = table([self.t('Файл'), self.t('Размер'), self.t('Статус'), ''])
+        self.file_table.setMinimumHeight(96); self.file_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.file_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection); self.file_table.setSortingEnabled(False)
+        header = self.file_table.horizontalHeader(); header.setStretchLastSection(False); header.setMinimumSectionSize(44)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch); header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed); self.file_table.setColumnWidth(1, 94)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive); self.file_table.setColumnWidth(2, 160)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed); self.file_table.setColumnWidth(3, 48)
+        self.queue_stack = QStackedWidget(); self.queue_stack.setMinimumHeight(96); self.queue_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.empty_queue = EmptyState(self.t('Файлы ещё не выбраны'), self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».'), icon='apk')
+        self.queue_stack.addWidget(self.empty_queue); self.queue_stack.addWidget(self.file_table); card.addWidget(self.queue_stack, 1)
         self.flags = []
+        options = FlowLayout(); options.setSpacing(12)
         for title, checked, help_key in [
-            ('Сохранить данные при переустановке', True, 'Заменит приложение новой версией, сохранив его настройки и личные данные.'),
+            ('Сохранить данные', True, 'Заменит приложение новой версией, сохранив его настройки и личные данные.'),
             ('Разрешить старую версию', False, 'Разрешит установить более старую версию. Некоторые приложения это не поддерживают.'),
-            ('Выдать разрешения приложению', True, 'Сразу разрешит приложению использовать запрошенные возможности, например микрофон и память.')]:
-            check = self.bind(QCheckBox(), title); check.setChecked(checked); check.setProperty('feature', 'apk.install'); self.bind(check, help_key, 'setToolTip'); self.flags.append(check); settings.addWidget(check)
-        details_layout = QVBoxLayout(); details_layout.setContentsMargins(0, 0, 0, 0); details_layout.addWidget(self.hint('Флаги установки: сохранение данных — -r, старая версия — -d, разрешения — -g. Части одного приложения устанавливаются вместе.'))
-        technical=self.disclosure('Технические подробности',settings)
-        technical.body.addLayout(details_layout)
+            ('Выдать разрешения', True, 'Сразу разрешит приложению использовать запрошенные возможности, например микрофон и память.')]:
+            check = self.bind(QCheckBox(), title); check.setChecked(checked); check.setProperty('feature', 'apk.install'); self.bind(check, help_key, 'setToolTip'); self.flags.append(check); options.addWidget(check)
+        card.addLayout(options)
+        action = QHBoxLayout(); action.setSpacing(12)
+        self.mode_hint = self.hint('Один APK — одно приложение.'); self.mode_hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred); action.addWidget(self.mode_hint, 1)
         self.install_button = self.button('Установить в автомобиль', self.install, True, icon='download', help_key='Проверит выбранные файлы и установит их на подключённое устройство. Результат появится напротив каждого файла.')
-        action = QHBoxLayout(); action.addWidget(self.install_button); action.addStretch(); settings.addLayout(action)
+        action.addWidget(self.install_button); card.addLayout(action)
         self.progress = QProgressBar(self); self.progress.setValue(0); self.progress.hide(); self.log = logbox(); self.log.setParent(self); self.log.hide()
         self.service.log_message.connect(lambda text: append_log(self.log, text)); self.service.status_changed.connect(self.set_status); self.service.progress_changed.connect(self.progress.setValue)
-        self.service.progress_changed.connect(self.update_progress); self.service.finished.connect(lambda _: self.update_actions()); self.file_table.itemSelectionChanged.connect(self.update_actions)
-        self.layout.addStretch(); self.update_mode_hint(); self.update_actions()
+        self.service.progress_changed.connect(self.update_progress); self.service.finished.connect(lambda _: self.update_actions())
+        self.file_table.itemSelectionChanged.connect(self.update_actions); self.mode.currentIndexChanged.connect(self.update_mode_hint)
+        self.remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.file_table); self.remove_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut); self.remove_shortcut.activated.connect(self.remove_selected)
+        self.update_mode_hint(); self.update_actions()
+
+    def editable(self):
+        return not self.main.busy and self.main.allowed('installer', False) and self.main.allowed('apk.install', False)
+
+    @staticmethod
+    def path_key(path):
+        return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
+
+    def feedback(self, key='', kind='success', **values):
+        self.feedback_key = key; self.feedback_values = values; self.feedback_kind = kind
+        self.queue_feedback.setText(self.t(key, **values) if key else '')
+        self.queue_feedback.setStyleSheet('color:' + {'success':'#51D8A5', 'info':'#87DAEE', 'warning':'#F5CE7E'}.get(kind, '#B3BECD') + ';')
 
     def update_progress(self, value):
         if self.main.busy and hasattr(self.main, 'global_progress'):
             self.main.global_progress.setRange(0, 100); self.main.global_progress.setValue(value)
 
     def update_mode_hint(self):
-        keys = ['Один APK — одно приложение.', 'Разные приложения установятся по очереди. Не выбирайте этот режим для частей одного приложения.', 'Выберите все части одного приложения или один готовый архив. Комплект установится целиком.']
+        keys = ['Один APK — одно приложение.', 'Разные приложения установятся по очереди.', 'Все части одного приложения устанавливаются вместе.']
         self.mode_hint.setText(self.t(keys[self.mode.currentIndex()])); self.update_actions()
 
     def update_actions(self):
-        editable = not self.main.busy and self.main.allowed('installer', False) and self.main.allowed('apk.install', False)
+        editable = self.editable()
         for widget in [self.add_button, self.folder_button, self.mode, self.drop_area, *self.flags]: widget.setEnabled(editable)
         self.clear_button.setEnabled(editable and bool(self.files)); self.install_button.setEnabled(editable and bool(self.files) and bool(self.main.target))
-        self.file_table.setVisible(bool(self.files)); self.empty_queue.setVisible(not self.files)
+        for row in range(self.file_table.rowCount()):
+            button = self.file_table.cellWidget(row, 3)
+            if button: button.setEnabled(editable)
+        self.queue_stack.setCurrentIndex(1 if self.files else 0)
         self.queue_summary.setText(self.t('Файлов в списке: {count}', count=len(self.files)))
 
     def retranslate(self):
         super().retranslate()
         for i, key in enumerate(self.mode_keys): self.mode.setItemText(i, self.t(key))
-        self.file_table.setHorizontalHeaderLabels([self.t(k) for k in ('Файл', 'Размер', 'Статус')])
-        self.empty_queue.title.setText(self.t('Файлы ещё не выбраны')); self.empty_queue.description.setText(self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».')); self.update_mode_hint(); self.update_actions()
+        self.file_table.setHorizontalHeaderLabels([self.t(k) for k in ('Файл', 'Размер', 'Статус')] + [''])
+        for row in range(self.file_table.rowCount()):
+            button = self.file_table.cellWidget(row, 3)
+            if button:
+                button.setAccessibleName(self.t('Убрать файл из списка')); update_help(button, self.main)
+            status = self.file_table.item(row, 2)
+            if status and status.data(Qt.ItemDataRole.UserRole) == 'В очереди': status.setText(self.t('В очереди'))
+        self.empty_queue.title.setText(self.t('Файлы ещё не выбраны')); self.empty_queue.description.setText(self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».'))
+        self.feedback(self.feedback_key, self.feedback_kind, **self.feedback_values); self.update_mode_hint(); self.update_actions()
 
     def dragEnterEvent(self, event):
-        if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()): event.acceptProposedAction()
+        if self.editable() and any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()): event.acceptProposedAction()
 
     def dropEvent(self, event):
+        if not self.editable(): event.ignore(); return
         self.add_paths([url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile() and url.toLocalFile()]); event.acceptProposedAction()
 
     @feature_required('apk.install', 'installer')
     def add_paths(self, paths):
         if self.main.busy: return
+        known = {self.path_key(p) for p in self.files}; added = duplicates = rejected = 0; scanning = False; last_row = None
         for path in paths:
             if not path: continue
             p = Path(path)
-            if p.is_dir():
-                self.main.background(lambda d=p: sorted(d.glob('*.apk')), lambda result, err: self.add_paths(result or [])); continue
-            if p.suffix.lower() in ('.apk', '.apks', '.xapk', '.apkm') and p.is_file() and str(p) not in self.files:
-                self.files.append(str(p)); row = self.file_table.rowCount(); self.file_table.insertRow(row)
-                for col, text in enumerate((p.name, human_size(p.stat().st_size), self.t('В очереди'))): self.file_table.setItem(row, col, QTableWidgetItem(text))
-                self.file_table.item(row, 0).setToolTip(str(p))
+            try:
+                if p.is_dir():
+                    generation = self.scan_generation; scanning = True; self.feedback('Читаем выбранную папку…', 'info')
+                    def scanned(result, error, generation=generation):
+                        if generation != self.scan_generation or not self.editable(): return
+                        if error: self.feedback('Не удалось прочитать папку. Выберите файлы вручную.', 'warning')
+                        else: self.add_paths(result or [])
+                    self.main.background(lambda d=p: sorted(f for f in d.iterdir() if f.is_file() and f.suffix.lower() == '.apk'), scanned); continue
+                if p.suffix.lower() not in ('.apk', '.apks', '.xapk', '.apkm') or not p.is_file(): rejected += 1; continue
+                key = self.path_key(p)
+                if key in known: duplicates += 1; continue
+                size = p.stat().st_size; canonical = str(p.resolve()); known.add(key); self.files.append(canonical)
+                row = self.file_table.rowCount(); self.file_table.insertRow(row)
+                for col, text in enumerate((p.name, human_size(size), self.t('В очереди'))): self.file_table.setItem(row, col, QTableWidgetItem(text))
+                self.file_table.item(row, 2).setData(Qt.ItemDataRole.UserRole, 'В очереди')
+                item = self.file_table.item(row, 0); item.setToolTip(canonical); item.setData(Qt.ItemDataRole.UserRole, canonical)
+                button = QPushButton(); button.setIcon(ui_icon('delete')); button.setFixedSize(36, 36); button.setProperty('feature', 'apk.install')
+                button.setProperty('help_key', 'Уберёт этот файл из очереди. Файл на компьютере останется.'); button.setAccessibleName(self.t('Убрать файл из списка'))
+                update_help(button, self.main); button.clicked.connect(lambda checked=False, key=key: self.remove_path(key)); self.file_table.setCellWidget(row, 3, button)
+                added += 1; last_row = row
+            except OSError: rejected += 1
         if any(Path(p).suffix.lower() != '.apk' for p in self.files): self.mode.setCurrentIndex(2)
         elif len(self.files) > 1 and self.mode.currentIndex() == 0: self.mode.setCurrentIndex(1)
+        if added:
+            self.feedback('Добавлено: {added} · Уже в списке: {duplicates}', added=added, duplicates=duplicates)
+            self.file_table.selectRow(last_row); self.file_table.scrollToItem(self.file_table.item(last_row, 0))
+        elif duplicates: self.feedback('Эти файлы уже в списке. Повторно не добавлены.', 'info')
+        elif not scanning: self.feedback('Подходящие файлы не найдены. Выберите APK или архив приложения.', 'warning')
+        if added and rejected: self.feedback('Добавлено: {added} · Пропущено: {rejected}', 'warning', added=added, rejected=rejected)
         self.update_actions()
 
     @feature_required('apk.install', 'installer')
     def add_files(self):
-        files, _ = QFileDialog.getOpenFileNames(self, self.t('Добавить файлы'), '', 'Android (*.apk *.apks *.xapk *.apkm)'); self.add_paths(files)
+        if not self.editable(): return
+        files, _ = QFileDialog.getOpenFileNames(self, self.t('Добавить файлы'), '', 'Android (*.apk *.apks *.xapk *.apkm)');
+        if files: self.add_paths(files)
 
     @feature_required('apk.install', 'installer')
     def add_folder(self):
+        if not self.editable(): return
         folder = QFileDialog.getExistingDirectory(self, self.t('Добавить папку'))
         if folder: self.add_paths([folder])
 
+    @feature_required('apk.install', 'installer')
+    def remove_path(self, key):
+        if not self.editable(): return
+        self.remove_rows([i for i, path in enumerate(self.files) if self.path_key(path) == key])
+
+    @feature_required('apk.install', 'installer')
+    def remove_selected(self):
+        if not self.editable(): return
+        self.remove_rows([index.row() for index in self.file_table.selectionModel().selectedRows()])
+
+    def remove_rows(self, rows):
+        if not self.editable(): return
+        rows = sorted({r for r in rows if 0 <= r < len(self.files)}, reverse=True)
+        self.scan_generation += 1
+        for row in rows: self.file_table.removeRow(row); del self.files[row]
+        if rows: self.feedback('Убрано из списка: {count}', 'info', count=len(rows))
+        self.update_actions()
+
+    @feature_required('apk.install', 'installer')
     def clear_files(self):
-        if not self.main.busy: self.files.clear(); self.file_table.setRowCount(0); self.update_actions()
+        if not self.editable(): return
+        count = len(self.files); self.scan_generation += 1; self.files.clear(); self.file_table.setRowCount(0)
+        self.feedback('Убрано из списка: {count}', 'info', count=count); self.update_actions()
 
     def set_status(self, rows, text, success=None):
         for row in rows:
+            if not 0 <= row < len(self.files): continue
             item = QTableWidgetItem(text)
             if success is not None: item.setForeground(QColor('#51D8A5' if success else '#FF939E'))
             self.file_table.setItem(row, 2, item)
@@ -2751,7 +2857,7 @@ class InstallerPage(Page):
         if mode == 1 and any(Path(p).suffix.lower() != '.apk' for p in self.files): self.main.error(self.t('Архивы устанавливаются в режиме Split.')); return
         if mode == 2 and any(Path(p).suffix.lower() != '.apk' for p in self.files) and len(self.files) != 1:
             self.main.error(self.t('Для продолжения нужен один комплект приложения.')); return
-        self.log.clear(); self.progress.setValue(0)
+        self.scan_generation += 1; self.log.clear(); self.progress.setValue(0)
         if self.service.start(self.files,mode,[flag for flag,check in zip(('-r','-d','-g'),self.flags) if check.isChecked()]): self.update_actions()
 
 class InstallService(QObject):
@@ -2982,7 +3088,9 @@ class ExplorerPage(Page):
         self.up_button = self.button('Вверх', self.up, icon='folder', help_key='Откроет папку на один уровень выше.')
         self.refresh_button = self.button('Обновить', self.refresh, icon='refresh', help_key='Заново прочитает содержимое открытой папки.')
         self.up_button.setProperty('feature', 'files'); path_row = QHBoxLayout(); path_row.setSpacing(12); path_row.addWidget(self.up_button); path_row.addWidget(self.path, 1); path_row.addWidget(self.refresh_button); card.addLayout(path_row)
-        self.bookmarks_widget = QWidget(); bookmarks = FlowLayout(); self.bookmarks_widget.setLayout(bookmarks); self.bookmark_buttons = []
+        self.bookmarks_widget = QWidget(); self.bookmarks_widget.setObjectName('explorerBookmarks')
+        self.bookmarks_widget.setStyleSheet('QWidget#explorerBookmarks { background: transparent; border: 0; }'); self.bookmarks_widget.setAutoFillBackground(False)
+        bookmarks = FlowLayout(); self.bookmarks_widget.setLayout(bookmarks); self.bookmark_buttons = []
         for label, path in [('Общая память', '/sdcard/'), ('Загрузки', '/sdcard/Download/'), ('Все накопители', '/storage/'), ('Системные приложения', '/system/priv-app/'), ('Временные файлы', '/data/local/tmp/')]:
             button = self.button(label, lambda checked=False, p=path: self.navigate(p), icon='folder', help_key='Быстро откроет эту папку в памяти автомобиля.'); button.setProperty('feature', 'files'); button.setProperty('quiet', True); bookmarks.addWidget(button); self.bookmark_buttons.append(button)
         card.addWidget(self.bookmarks_widget)
@@ -3000,13 +3108,14 @@ class ExplorerPage(Page):
         self.more_button.setMenu(self.more_menu); actions = QHBoxLayout(); actions.setSpacing(8)
         for button in (self.push_button, self.pull_button, self.more_button): actions.addWidget(button)
         actions.addStretch(1); card.addLayout(actions)
-        listing = self.card('Содержимое папки'); self.list_summary = QLabel(); self.list_summary.setObjectName('subtitle'); listing.addWidget(self.list_summary)
-        self.listing_title = listing.itemAt(0).widget(); listing.setAlignment(Qt.AlignmentFlag(0)); listing.parentWidget().setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        listing = self.card('Содержимое папки'); self.list_summary = QLabel(); self.list_summary.setObjectName('subtitle'); self.list_summary.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed); listing.addWidget(self.list_summary)
+        self.listing_title = listing.itemAt(0).widget(); self.listing_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed); listing.setAlignment(Qt.AlignmentFlag(0)); listing.parentWidget().setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.file_table = table([self.t(k) for k in ('Имя', 'Тип', 'Размер', 'Дата')]); self.file_table.setMinimumHeight(120); self.file_table.horizontalHeader().setMinimumSectionSize(80)
         self.file_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch); self.file_table.cellDoubleClicked.connect(self.open_entry); self.file_table.itemSelectionChanged.connect(self.update_actions)
         self.file_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.file_table.customContextMenuRequested.connect(self.open_context_menu); listing.addWidget(self.file_table, 1)
-        self.empty_files = EmptyState(self.t('Откройте память автомобиля'), self.t('Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.'), icon='folder'); listing.addWidget(self.empty_files)
+        self.empty_files = EmptyState(self.t('Откройте память автомобиля'), self.t('Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.'), icon='folder'); listing.addWidget(self.empty_files, 1)
+        self.file_table.hide()
         self.layout.setStretch(self.layout.count() - 1, 1)
         self.progress = QProgressBar(self); self.progress.setValue(0); self.progress.hide(); self.log = logbox(); self.log.setParent(self); self.log.hide(); self.update_actions()
 
@@ -3360,7 +3469,32 @@ class AppsPage(Page):
             self.main.sequence(self.t('Экспорт APK'), steps, target=target)
         self.main.sequence(self.t('Экспорт APK'), [Step(['pm', 'path', pkg])], paths_ready, target=target)
 
+EN.update({
+    '80 — мельче всего': '80 — smallest',
+    '100 — очень мелко': '100 — very small',
+    '120 — мелко': '120 — small',
+    '140 — компактно': '140 — compact',
+    '150 — немного меньше': '150 — slightly smaller',
+    '160 — стандарт': '160 — standard',
+    '180 — чуть больше': '180 — a little larger',
+    '200 — крупно': '200 — large',
+    '220 — очень крупно': '220 — very large',
+    '240 — ещё крупнее': '240 — even larger',
+    '260 — крупнее всего': '260 — largest',
+    'Введите число от 80 до 260': 'Enter a number from 80 to 260',
+    'Выберите размер из списка или введите целое число от 80 до 260. Чем больше число, тем крупнее текст и кнопки. Вариант 160 называется стандартом; заводской размер вашей машины может отличаться.': 'Choose a size or enter a whole number from 80 to 260. Higher numbers make text and buttons larger. The 160 option is called standard; your car’s factory size may differ.',
+    'Введите целое число от 80 до 260.': 'Enter a whole number from 80 to 260.',
+})
+
 class TweaksPage(Page):
+    DPI_OPTIONS = (
+        (80, '80 — мельче всего'), (100, '100 — очень мелко'),
+        (120, '120 — мелко'), (140, '140 — компактно'),
+        (150, '150 — немного меньше'), (160, '160 — стандарт'),
+        (180, '180 — чуть больше'), (200, '200 — крупно'),
+        (220, '220 — очень крупно'), (240, '240 — ещё крупнее'),
+        (260, '260 — крупнее всего'),
+    )
     def __init__(self, main):
         super().__init__(main); self.action_buttons = []
         card = self.card('Масштаб и дисплеи', 'Подберите удобный размер текста и элементов на выбранных экранах.')
@@ -3368,7 +3502,11 @@ class TweaksPage(Page):
         form = QGridLayout(); form.setHorizontalSpacing(16); form.setVerticalSpacing(8)
         form.addWidget(self.label('Экран'), 0, 0); form.addWidget(self.label('Масштаб интерфейса'), 0, 1)
         self.display = QComboBox(); self.display_keys = ['Все мультимедийные', 'Центральный', 'Пассажирский', 'Приборная панель']; self.display.addItems([self.t(k) for k in self.display_keys]); self.display.currentIndexChanged.connect(self.update_actions)
-        self.dpi = QComboBox(); self.dpi.setEditable(True); self.dpi.addItems(['140', '150', '160']); self.dpi.setCurrentText('160')
+        self.dpi = QComboBox(); self.dpi.setEditable(True); self.dpi.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        for value, label in self.DPI_OPTIONS: self.dpi.addItem(self.t(label), value)
+        self.dpi.setCurrentIndex(self.dpi.findData(160))
+        self.bind(self.dpi.lineEdit(), 'Введите число от 80 до 260', 'setPlaceholderText')
+        self.bind(self.dpi, 'Выберите размер из списка или введите целое число от 80 до 260. Чем больше число, тем крупнее текст и кнопки. Вариант 160 называется стандартом; заводской размер вашей машины может отличаться.', 'setToolTip')
         form.addWidget(self.display, 1, 0); form.addWidget(self.dpi, 1, 1); form.setColumnStretch(0, 1); form.setColumnStretch(1, 1); card.addLayout(form)
         self.row(card, self.action_button('Применить масштаб', lambda: self.set_density(False), 'tweaks.dpi', icon='sliders', accent=True, help_key='Изменит размер текста и кнопок на выбранном экране. Большее число делает элементы крупнее. Приборная панель требует отдельного подтверждения.'), self.action_button('Вернуть заводской масштаб', lambda: self.set_density(True), 'tweaks.dpi', icon='undo', help_key='Уберёт пользовательский масштаб и вернёт заводской размер элементов на выбранных экранах.'), self.action_button('Проверить экраны', self.refresh_density, 'tweaks.dpi', icon='monitor', help_key='Прочитает текущие размеры и масштаб экранов. Ничего не меняет.'))
         self.row(card, self.action_button('Сопоставить экраны', self.map_displays, 'tweaks.dpi', icon='settings', help_key='Поможет указать, какой экран является центральным, пассажирским и приборным, если прошивка использует другой порядок.'))
@@ -3435,9 +3573,24 @@ class TweaksPage(Page):
         self.main.sequence(self.t('Восстановление системы'),steps,lambda ok,r:(DATA_DIR/'operation.json').unlink(missing_ok=True) if ok else None)
 
     def retranslate(self):
+        density_text = self.dpi.currentText(); density_index = self.dpi.currentIndex()
+        selected_preset = density_index >= 0 and density_text == self.dpi.itemText(density_index)
         super().retranslate()
         for i, text in enumerate(self.display_keys): self.display.setItemText(i, self.t(text))
+        blocked = self.dpi.blockSignals(True)
+        for i, (value, label) in enumerate(self.DPI_OPTIONS): self.dpi.setItemText(i, self.t(label))
+        self.dpi.setEditText(self.dpi.itemText(density_index) if selected_preset else density_text)
+        self.dpi.blockSignals(blocked)
         self.update_profile(); self.update_actions()
+
+    def density_value(self):
+        text = self.dpi.currentText().strip()
+        value = next((self.dpi.itemData(index) for index in range(self.dpi.count()) if text == self.dpi.itemText(index)), None)
+        if value is None:
+            if not re.fullmatch(r'\d+', text): raise ValueError('density must be a whole number')
+            value = int(text)
+        if not 80 <= value <= 260: raise ValueError('density outside supported range')
+        return value
 
     def update_profile(self):
         p = self.main.profile
@@ -3472,10 +3625,9 @@ class TweaksPage(Page):
         if any(i not in self.main.profile.displays for i in ids): self.main.error(self.t('Прошивка не поддерживает DPI по дисплеям. Операция недоступна.')); return
         if not self.main.profile.per_display and any(i != 0 for i in ids): self.main.error(self.t('Прошивка не поддерживает DPI по дисплеям. Операция недоступна.')); return
         try:
-            value = int(self.dpi.currentText())
-            if not 72 <= value <= 1000: raise ValueError()
+            value = self.density_value()
         except ValueError:
-            if not reset: self.main.error(self.t('Значение DPI должно быть от 72 до 1000.')); return
+            if not reset: self.main.error(self.t('Введите целое число от 80 до 260.')); return
             value = 160
         if self.main.display_map['cluster'] in ids and not self.main.confirm(self.t('Изменить DPI приборной панели?')): return
         steps = []
@@ -3955,7 +4107,7 @@ class KeyboardPage(Page):
     def __init__(self, main):
         super().__init__(main); self.downloader = DownloadService(main); self.items = []
         card = self.card('Клавиатуры', 'Один комплект обновляет клавиатуры центрального и пассажирского экранов.')
-        self.row(card, self.hint('Выберите комплект из списка. До установки программа проверит оба файла и сохранит штатные клавиатуры.'))
+        self.intro_hint = self.hint('Выберите комплект из списка. До установки программа проверит оба файла и сохранит штатные клавиатуры.'); card.addWidget(self.intro_hint)
         row = QHBoxLayout(); row.setSpacing(12)
         self.combo = QComboBox(); self.combo.setMinimumContentsLength(20); self.combo.currentIndexChanged.connect(self.describe); row.addWidget(self.combo, 1)
         row.addWidget(self.button('Обновить каталог', lambda: main.catalog.refresh(), icon='undo', help_key='Получить актуальный список клавиатур, который опубликовал администратор.')); card.addLayout(row)

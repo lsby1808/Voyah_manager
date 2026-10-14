@@ -28,10 +28,10 @@ for name in ('PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6'):
                 dest.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(source, dest)
 
 version = ROOT / 'version_info.txt'
-manifest = {'version':'2.1.0','source_sha256':hashlib.sha256((ROOT/'voyah_manager.py').read_bytes()).hexdigest(),
+manifest = {'version':'2.1.1','source_sha256':hashlib.sha256((ROOT/'voyah_manager.py').read_bytes()).hexdigest(),
             'python':sys.version.split()[0],'dependencies':{name:importlib.metadata.version(name) for name in ('PySide6','PyInstaller')}}
 (ROOT/'build_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
-version.write_text("""VSVersionInfo(ffi=FixedFileInfo(filevers=(2,1,0,0), prodvers=(2,1,0,0), mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0,0)), kids=[StringFileInfo([StringTable('040904B0', [StringStruct('CompanyName','Voyah Manager'), StringStruct('FileDescription','Voyah Manager - Android Automotive Workbench'), StringStruct('FileVersion','2.1.0'), StringStruct('InternalName','Voyah Manager'), StringStruct('OriginalFilename','Voyah Manager.exe'), StringStruct('ProductName','Voyah Manager'), StringStruct('ProductVersion','2.1.0')])]), VarFileInfo([VarStruct('Translation',[1033,1200])])])""", encoding='utf-8')
+version.write_text("""VSVersionInfo(ffi=FixedFileInfo(filevers=(2,1,1,0), prodvers=(2,1,1,0), mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0,0)), kids=[StringFileInfo([StringTable('040904B0', [StringStruct('CompanyName','Voyah Manager'), StringStruct('FileDescription','Voyah Manager - Android Automotive Workbench'), StringStruct('FileVersion','2.1.1'), StringStruct('InternalName','Voyah Manager'), StringStruct('OriginalFilename','Voyah Manager.exe'), StringStruct('ProductName','Voyah Manager'), StringStruct('ProductVersion','2.1.1')])]), VarFileInfo([VarStruct('Translation',[1033,1200])])])""", encoding='utf-8')
 command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--windowed',
     '--distpath', args.distpath,
     '--onedir' if args.onedir else '--onefile', '--name', 'Voyah Manager',

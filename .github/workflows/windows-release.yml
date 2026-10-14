@@ -69,10 +69,10 @@ jobs:
           foreach ($tool in $report.tool_checks.PSObject.Properties) { if (-not $tool.Value.ok) { throw ('Bundled tool failed: '+$tool.Name) } }
           $hash=(Get-FileHash 'dist/Voyah Manager.exe' -Algorithm SHA256).Hash.ToLower()
           "$hash  Voyah Manager.exe" | Set-Content 'dist/Voyah Manager.exe.sha256' -Encoding ascii
-          Copy-Item build_manifest.json,README_RU.md,HARDWARE_CHECKLIST_RU.md,QA_REPORT_V21_RU.md,THIRD_PARTY_NOTICES.txt -Destination dist
+          Copy-Item build_manifest.json,README_RU.md,HARDWARE_CHECKLIST_RU.md,QA_REPORT_V21_RU.md,QA_REPORT_V211_RU.md,THIRD_PARTY_NOTICES.txt -Destination dist
           $suite=([xml](Get-Content test-results.xml -Raw)).testsuites.testsuite
           $facts="`n`n## Автоматическая проверка опубликованной сборки`n`nGitHub Actions: $env:GITHUB_RUN_ID. Проверок: $($suite.tests); ошибок: $($suite.errors); падений: $($suite.failures).`n`nEXE SHA-256: $hash`nSource SHA-256: $sourceHash`n`nВстроенные инструменты запущены из автономного EXE; соответствие исходнику подтверждено. Реальное ГУ не подключалось."
-          Add-Content dist/QA_REPORT_V21_RU.md $facts -Encoding utf8
+          Add-Content dist/QA_REPORT_V211_RU.md $facts -Encoding utf8
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-exe
@@ -104,7 +104,7 @@ jobs:
             const fs = require('fs');
             const manifest = JSON.parse(fs.readFileSync('dist/build_manifest.json', 'utf8'));
             const tag = `v${manifest.version}`;
-            const body = `Полный редизайн: единая палитра и контурные значки, компактное подключение, карточки приложений, инспектор по задачам, закреплённые действия и общий журнал с отменой. RU/EN, масштабирование и уменьшение анимации.\n\nАвтономный Windows x64 EXE со встроенными Python, Qt, ADB, AAPT2, bundletool и Java. Каталог: catalog.json в main. Отчёт проверок и SHA-256 приложены.\n\nСборка без цифровой подписи. Системные сценарии проверены на имитаторе, реальное ГУ не подключалось.\n\nSource SHA-256: ${manifest.source_sha256}\nCommit: ${context.sha}`;
+            const body = `Исправления интерфейса по отзывам: компактная страница APK с ПК, удаление отдельных файлов, видимый результат перетаскивания и защита от дублей. Исправлены пояснение клавиатур, линия вкладок инспектора, значки и фон закладок. Масштаб 80–260 с понятными подписями. Убран мини-пульт и выбор внешнего ADB; используется встроенная копия.\n\nАвтономный Windows x64 EXE со встроенными Python, Qt, ADB, AAPT2, bundletool и Java. Полный набор тестов, сборка в каталоге и onefile проверяются автоматически. SHA-256 и отчёт приложены. Сборка без цифровой подписи, реальное ГУ не подключалось.\n\nSource SHA-256: ${manifest.source_sha256}\nCommit: ${context.sha}`;
             let release;
             try { release = (await github.rest.repos.getReleaseByTag({...context.repo, tag})).data; }
             catch (error) {

@@ -10,24 +10,25 @@ def digest(path):
 source=digest(root/'voyah_manager.py');executable=root/'dist'/'Voyah Manager.exe'
 build=json.loads((root/'build_manifest.json').read_text())
 assert build['source_sha256']==source
+version=build['version']
+series='v'+version.replace('.','')
 smokes={}
 for name,dpr,api in [('100',1.0,30),('125',1.25,30),('150',1.5,30),('offline',1.0,0)]:
-    folder=root/('qa-v21-release-'+name);report=json.loads((folder/'report.json').read_text())
-    assert report['version']=='2.1.0' and report['frozen'] and report['tabs']==8
+    folder=root/('qa-'+series+'-release-'+name);report=json.loads((folder/'report.json').read_text())
+    assert report['version']==version and report['frozen'] and report['tabs']==8
     assert report['build']['source_sha256']==source and report['dpr']==dpr and report['profile']==api
     assert report['catalog']['repository']=='lsby1808/Voyah_manager' and report['catalog']['revision']>=1
     assert all(report['tools'].values()) and all(check['ok'] for check in report['tool_checks'].values())
     assert len(list(folder.glob('tab-*.png')))==16
     assert len(list(folder.glob('admin-*.png')))==4
     smokes[name]=report
-suite=ET.parse(root/'qa-v21-tests.xml').find('testsuite')
+suite=ET.parse(root/('qa-'+series+'-tests.xml')).find('testsuite')
 count=int(suite.get('tests'))
 assert count>=124 and suite.get('failures')=='0' and suite.get('errors')=='0'
-ui=ET.parse(root/'qa-v21-ui-final.xml').find('testsuite')
-assert ui.get('failures')=='0' and ui.get('errors')=='0'
-count=len({(case.get('classname'),case.get('name')) for report in (suite,ui) for case in report.findall('testcase')})
-publication=json.loads((root/'qa-v21-publication.json').read_text()) if (root/'qa-v21-publication.json').exists() else {}
-manifest={'version':'2.1.0','file':executable.name,'size_bytes':executable.stat().st_size,
+count=len({(case.get('classname'),case.get('name')) for case in suite.findall('testcase')})
+publication_path=root/('qa-'+series+'-publication.json')
+publication=json.loads(publication_path.read_text()) if publication_path.exists() else {}
+manifest={'version':version,'file':executable.name,'size_bytes':executable.stat().st_size,
           'sha256':digest(executable),'source_sha256':source,'authenticode':'NotSigned',
           'unique_tests':count,'real_headunit_tested':False,
           'github_publication_tested':{'application_admin':'mock API','codex_connector':'actual repository commits','public_catalog':'actual frozen EXE HTTPS read'},

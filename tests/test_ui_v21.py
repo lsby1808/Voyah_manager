@@ -19,7 +19,7 @@ def test_stable_sections_and_direct_workspace_containers(window, qtbot):
         qtbot.waitUntil(lambda: window.current_section() == key)
         container = window.stack.currentWidget()
         assert container.property('section') == key
-        if key in ('files', 'apps', 'terminal'):
+        if key in ('installer', 'files', 'apps', 'terminal'):
             assert container is window.pages[key]
             assert not isinstance(container, QScrollArea)
         else:
