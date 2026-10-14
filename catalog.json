@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "features": {
+    "catalog": true,
+    "installer": true,
+    "keyboards": true,
+    "inspector": true,
+    "files": true,
+    "apps": true,
+    "tweaks": true,
+    "terminal": true,
+    "apk.install": true,
+    "files.write": true,
+    "apps.freeze": true,
+    "apps.clear": true,
+    "apps.uninstall": true,
+    "device.root": true,
+    "device.reboot": true,
+    "tweaks.dpi": true,
+    "tweaks.permissions": true,
+    "tweaks.network": true,
+    "repair.settings": true,
+    "repair.verity": true,
+    "keyboard.install": true,
+    "keyboard.restore": true
+  },
+  "apps": [],
+  "keyboards": []
+}
