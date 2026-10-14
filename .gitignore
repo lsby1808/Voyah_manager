@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.downloads/
+tools/
+build/
+dist/
+staging*/
+qa-*/
+*.spec
+version_info.txt
+build_manifest.json
+*.log
+.env*
+reverse-output/
+reverse-tools/
+releases/
