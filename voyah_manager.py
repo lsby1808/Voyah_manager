@@ -394,6 +394,7 @@ class ProcessJob(QObject):
         self.timed_out = True; self.proc.kill()
 
     def cancel(self):
+        if self.ended: return
         self.cancelled = True; self.proc.kill()
 
     def finish(self, code=0, status=None):
@@ -413,7 +414,10 @@ class Runner(QObject):
         super().__init__(parent); self.jobs = set()
 
     def run(self, program, args, callback, **kwargs):
-        job = ProcessJob(self, program, args, callback, **kwargs); self.jobs.add(job); return job
+        job = ProcessJob(self, program, args, callback, **kwargs)
+        # FailedToStart can be emitted synchronously inside QProcess.start().
+        if not job.ended: self.jobs.add(job)
+        return job
 
     def cancel_all(self):
         for job in list(self.jobs):
@@ -1645,7 +1649,7 @@ class MainWindow(QMainWindow):
             feature=widget.property('feature')
             section=next((key for key,page in self.pages.items() if page.isAncestorOf(widget)),None)
             reason=''
-            if (feature and not self.allowed(feature,False)) or (section and not self.allowed(section,False)): reason='Отключено администратором'
+            if (feature and not self.allowed(feature,False)) or (section and not self.allowed(section,False)) or (isinstance(widget,VoyahButton) and not widget._policy_enabled): reason='Отключено администратором'
             elif not widget.isEnabled():
                 if self.busy: reason='Дождитесь завершения или отмените текущее задание.'
                 elif not self.target and section!='terminal': reason='Сначала подключите устройство.'
@@ -4518,7 +4522,12 @@ def main():
         args.smoke_dir.mkdir(parents=True, exist_ok=True)
         tool_checks = {}
         checks_started = [False]
+        smoke_started=time.monotonic()
         def check_tools(index=0):
+            # On a fresh Windows profile the verified ADB cache is populated by a worker.
+            # Wait asynchronously; a fixed four-second delay can test an empty program.
+            if index==0 and (not window.adb_path or window.busy) and time.monotonic()-smoke_started<45:
+                QTimer.singleShot(100,check_tools); return
             checks_started[0] = True
             commands = [('adb', window.adb_path, ['version']), ('aapt2', window.tools.path('aapt2.exe'), ['version']),
                         ('bundletool', window.tools.path('jre/bin/java.exe'), ['-jar', str(window.tools.path('bundletool.jar')), 'version'])]

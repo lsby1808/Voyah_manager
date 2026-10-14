@@ -47,7 +47,8 @@ jobs:
           QT_QPA_PLATFORM: windows
         run: |
           $app = Start-Process -FilePath 'staging/Voyah Manager/Voyah Manager.exe' -ArgumentList @('--demo','--bundled-adb','--smoke-dir','qa-onedir') -PassThru -Wait -WindowStyle Hidden
-          if ($app.ExitCode -ne 0) { throw 'Directory EXE failed' }
+          $app.WaitForExit(); $app.Refresh()
+          if ($app.ExitCode -ne 0) { Write-Output ('Directory exit code: '+$app.ExitCode); Get-Content "$env:LOCALAPPDATA/Voyah Manager/voyah-manager.log" -Tail 80 -ErrorAction SilentlyContinue; throw 'Directory EXE failed' }
           $report = Get-Content qa-onedir/report.json -Raw | ConvertFrom-Json
           if (-not $report.frozen -or $report.tabs -ne 8) { throw 'Invalid smoke report' }
           foreach ($tool in $report.tool_checks.PSObject.Properties) { if (-not $tool.Value.ok) { throw ('Bundled tool failed: '+$tool.Name) } }
@@ -60,7 +61,8 @@ jobs:
           $env:PATH="$env:SystemRoot\System32;$env:SystemRoot"
           Remove-Item Env:PYTHONHOME,Env:PYTHONPATH,Env:JAVA_HOME -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath 'dist/Voyah Manager.exe' -ArgumentList @('--demo','--bundled-adb','--smoke-dir','qa-onefile') -PassThru -Wait -WindowStyle Hidden
-          if ($app.ExitCode -ne 0) { throw 'Onefile EXE failed' }
+          $app.WaitForExit(); $app.Refresh()
+          if ($app.ExitCode -ne 0) { Write-Output ('Onefile exit code: '+$app.ExitCode); Get-Content "$env:LOCALAPPDATA/Voyah Manager/voyah-manager.log" -Tail 80 -ErrorAction SilentlyContinue; throw 'Onefile EXE failed' }
           $report = Get-Content qa-onefile/report.json -Raw | ConvertFrom-Json
           $sourceHash=(Get-FileHash voyah_manager.py -Algorithm SHA256).Hash.ToLower()
           if (-not $report.frozen -or $report.build.source_sha256 -ne $sourceHash) { throw 'Source provenance mismatch' }

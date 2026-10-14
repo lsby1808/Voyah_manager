@@ -244,3 +244,22 @@ def test_current_operation_state_follows_language(window):
     assert window.operation_label.text()==v.EN['Готово к работе']
     assert window.notice_label.text()==v.EN['Готово: {name}'].format(name=v.EN['Встроенный ADB'])
     assert window.operation_name==v.EN['Встроенный ADB']
+
+
+def test_dependent_admin_restriction_keeps_its_explanation(window):
+    keyboard=window.pages['keyboards']
+    window.catalog.profile['features']['device.root']=False; window.apply_policy()
+    assert not keyboard.restore_btn.isEnabled()
+    assert window.t('Отключено администратором') in keyboard.restore_btn.toolTip()
+    assert window.t(keyboard.restore_btn.property('help_key')) in keyboard.restore_btn.toolTip()
+    window.catalog.profile['features']['device.root']=True; window.apply_policy()
+    assert window.t('Отключено администратором') not in keyboard.restore_btn.toolTip()
+
+
+def test_failed_process_start_does_not_leave_a_dead_job(qtbot):
+    runner=v.Runner(); results=[]
+    job=runner.run('',[],results.append)
+    qtbot.waitUntil(lambda: bool(results),timeout=2000); qtbot.wait(30)
+    assert not results[0].ok and results[0].code==-1
+    assert job.ended and not runner.jobs
+    runner.cancel_all(); job.cancel()
