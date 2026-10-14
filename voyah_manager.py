@@ -895,12 +895,23 @@ def make_icon() -> QIcon:
     p.setPen(QPen(QColor('#97E8F7'), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)); p.drawLine(44, 31, 63, 58); p.drawLine(63, 58, 79, 31)
     p.end(); return QIcon(pix)
 
-def logbox():
-    w = QPlainTextEdit(); w.setReadOnly(True); w.setMaximumBlockCount(MAX_LOG_LINES); return w
+def visible_log_tail(text):
+    # Bound the text before Qt lays out every line, rather than pruning afterwards.
+    lines=text.splitlines(keepends=True)
+    return ''.join(lines[-MAX_LOG_LINES:]) if len(lines)>MAX_LOG_LINES else text
+
+class LogView(QPlainTextEdit):
+    def __init__(self):
+        super().__init__(); self.setReadOnly(True); self.setMaximumBlockCount(MAX_LOG_LINES)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+    def setPlainText(self,text): super().setPlainText(visible_log_tail(text))
+
+def logbox(): return LogView()
 
 def append_log(widget, text):
     if not text:
         return
+    text=visible_log_tail(text)
     cursor = widget.textCursor(); cursor.movePosition(QTextCursor.MoveOperation.End); cursor.insertText(text)
     widget.setTextCursor(cursor); widget.ensureCursorVisible()
 

@@ -115,7 +115,8 @@ jobs:
             if (tagRef.object.sha !== context.sha) {
               // Finalise this initial 2.1.0 candidate after the final drop-input check.
               // Future changes to an already published version must bump its version.
-              if (tag !== 'v2.1.0' || tagRef.object.sha !== '23eb061fe32a3c122bdec2e008516e229caade36')
+              const initialCandidates = ['23eb061fe32a3c122bdec2e008516e229caade36', 'f93576bd78d49f040481c053007bcd7c334242f0'];
+              if (tag !== 'v2.1.0' || !initialCandidates.includes(tagRef.object.sha))
                 throw new Error('This version is already published from another commit. Bump the version.');
               await github.rest.git.updateRef({...context.repo, ref:`tags/${tag}`, sha:context.sha, force:true});
             }

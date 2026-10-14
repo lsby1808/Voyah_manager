@@ -284,3 +284,13 @@ def test_empty_file_argument_is_not_the_current_directory(window,monkeypatch):
     monkeypatch.setattr(window.pages['files'],'transfer',lambda *args,**kwargs:operations.append('push'))
     window.pages['installer'].add_paths(['']); window.pages['files'].push_paths([''])
     assert not operations and not window.pages['installer'].files
+
+
+def test_large_log_is_bounded_before_rendering_and_keeps_latest_records(qtbot):
+    view=v.logbox();qtbot.addWidget(view)
+    source=''.join(f'event-{index:05d}\n' for index in range(20000))
+    view.setPlainText(source)
+    assert view.document().blockCount()<=v.MAX_LOG_LINES
+    assert 'event-19999' in view.toPlainText() and 'event-00000' not in view.toPlainText()
+    assert view.lineWrapMode()==v.QPlainTextEdit.LineWrapMode.NoWrap
+    assert source.startswith('event-00000') and len(source.splitlines())==20000
