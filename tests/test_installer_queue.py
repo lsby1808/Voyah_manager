@@ -147,13 +147,12 @@ def test_pending_directory_scan_cannot_mutate_a_locked_queue(window, monkeypatch
     page.update_actions()
 
 
-def test_manual_split_mode_and_queue_order_survive_folder_add(window, monkeypatch, tmp_path):
+def test_queue_order_survives_folder_add(window, monkeypatch, tmp_path):
     page = window.pages['installer']; folder = tmp_path / 'parts'; folder.mkdir()
     files = queue_files(folder, 3); callbacks = []
-    page.mode.setCurrentIndex(2); page.add_paths([files[2]])
+    page.add_paths([files[2]])
     monkeypatch.setattr(window, 'background', lambda work, callback: callbacks.append((work, callback)))
     page.add_paths([folder]); work, callback = callbacks.pop(); callback(work(), None)
-    assert page.mode.currentIndex() == 2
     assert_queue_matches_table(page, [files[2], files[0], files[1]])
 
 
@@ -193,7 +192,8 @@ def test_installer_workspace_fits_without_page_scroll(window, qtbot, tmp_path, s
     drop = visible_rect(page.drop_area); queue = visible_rect(page.file_table)
     options = [visible_rect(check) for check in page.flags]
     install = visible_rect(page.install_button)
-    for control in (page.add_button, page.folder_button, page.mode, page.clear_button): visible_rect(control)
+    for control in (page.add_button, page.folder_button, page.clear_button): visible_rect(control)
+    assert not page.mode.isVisible()
     frame = page.layout.itemAt(0).widget()
     metrics = {
         'requested': size, 'language': language, 'window': window.size().toTuple(),

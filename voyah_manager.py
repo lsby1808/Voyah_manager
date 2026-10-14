@@ -32,6 +32,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from PySide6.QtCore import (Qt, QObject, Signal, QProcess, QTimer, QThreadPool,
@@ -47,7 +48,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QDialogButtonBox, QListWidget, QListWidgetItem, QStyle, QStackedWidget, QFormLayout, QToolButton, QLayout, QWidgetItem, QSizePolicy, QStyleOptionButton, QGraphicsOpacityEffect)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-VERSION = '2.1.1'
+VERSION = '2.1.2'
 APP_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 DATA_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Voyah Manager'
@@ -1013,6 +1014,7 @@ class Page(QWidget):
         for obj,key,method in self.bindings:
             try:
                 getattr(obj,method)(self.t(key))
+                if method=='setText' and obj.property('icon_only'): obj.setText('')
                 if obj.property('help_key'): update_help(obj,self.main)
             except RuntimeError: continue
 
@@ -1525,12 +1527,76 @@ EN.update({
     'Не удалось подготовить встроенное средство связи. Перезапустите программу. Если ошибка повторится, скачайте полную сборку заново.': 'The built-in connection tool could not be prepared. Restart the app. If the problem continues, download the complete app again.',
 })
 
+# Recovered from main.voyahPasswordFor (0x14045a620) in the supplied installer.
+# Its FixedZone is CST +28800; digit sums are deliberately NOT reduced modulo 10.
+BEIJING_TIME = timezone(timedelta(hours=8), 'CST')
+
+def voyah_engineering_password(day):
+    year, month_day = day.year, day.month * 100 + day.day
+    result = ''
+    for _ in range(4):
+        result = str(year % 10 + month_day % 10) + result
+        year //= 10; month_day //= 10
+    return result
+
+def engineering_passwords(now=None):
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None: raise ValueError('An aware time is required')
+    today = now.astimezone(BEIJING_TIME).date()
+    return [(today + timedelta(days=offset), voyah_engineering_password(today + timedelta(days=offset))) for offset in (0, -1, 1)]
+
+EN.update({
+    'Пароль инженерного меню': 'Engineering menu password',
+    'Инженерное меню · {password}': 'Engineering menu · {password}',
+    'Пекин · {date}. Нажмите, чтобы посмотреть и скопировать пароль.': 'Beijing · {date}. Click to view and copy the password.',
+    'Пароль меняется в полночь по Пекину. Если дата в машине отличается, попробуйте вариант для соседнего дня.': 'The password changes at midnight in Beijing. If your car shows a different date, try the previous or next day.',
+    'Сегодня': 'Today', 'Вчера': 'Yesterday', 'Завтра': 'Tomorrow',
+    'Ранние прошивки': 'Earlier firmware',
+    'Варианты из стороннего установщика. Подходящий пароль зависит от прошивки; регистр букв важен.': 'Options found in the other installer. The correct password depends on firmware; letter case matters.',
+    'Результат записи': 'Recording results',
+    'После записи здесь появятся найденные события.': 'Events found during recording will appear here.',
+    'На этом компьютере': 'On this computer', 'Демонстрационный режим': 'Demo mode',
+    'Показывает работу программы без автомобиля. Все команды автомобиля имитируются. Настройка действует только на этом компьютере.': 'Explore the app without a vehicle. All vehicle commands are simulated. This setting applies only on this computer.',
+    'Применить и перезапустить': 'Apply and restart',
+    'Сначала завершите текущее действие и остановите наблюдение.': 'Finish the current task and stop live monitoring first.',
+    'Не удалось перезапустить программу. Настройка не изменена.': 'Could not restart the app. The setting has not changed.',
+    'Настройка сохранена': 'Setting saved',
+    'Способ установки определится автоматически.': 'The installation method is detected automatically.',
+    'Проверяем состав выбранных APK…': 'Checking the selected APK files…',
+    'Установок: {apps} · Комплектов из частей: {bundles}': 'Installs: {apps} · Split bundles: {bundles}',
+    'Для частей приложения не найден единственный основной APK. Уберите лишние версии или добавьте base.apk.': 'The split files need exactly one matching base APK. Remove extra versions or add base.apk.',
+})
+
+class EngineeringPasswordDialog(QDialog):
+    def __init__(self, main):
+        super().__init__(main); self.main=main; self.setWindowTitle(main.t('Пароль инженерного меню')); self.resize(560, 360)
+        layout=QVBoxLayout(self); layout.setContentsMargins(20,20,20,20); layout.setSpacing(12)
+        hint=QLabel(main.t('Пароль меняется в полночь по Пекину. Если дата в машине отличается, попробуйте вариант для соседнего дня.')); hint.setWordWrap(True); hint.setObjectName('subtitle'); layout.addWidget(hint)
+        self.rows=[]
+        for label in ('Сегодня','Вчера','Завтра'):
+            row=QHBoxLayout(); title=QLabel(); title.setObjectName('subtitle'); row.addWidget(title,1)
+            button=QPushButton(); button.setIcon(ui_icon('copy')); button.clicked.connect(lambda checked=False,b=button:self.copy(b.property('password'))); row.addWidget(button)
+            layout.addLayout(row); self.rows.append((label,title,button))
+        extra=Disclosure(main.t('Ранние прошивки'),main); layout.addWidget(extra)
+        note=QLabel(main.t('Варианты из стороннего установщика. Подходящий пароль зависит от прошивки; регистр букв важен.')); note.setWordWrap(True); extra.body.addWidget(note)
+        for value,models in [('hellomotor','Free 2021 · МоторИнвест'),('hellovoyah','Free 2021 / Free 2023'),('HelloNewVoyah2022','Free 2023 · Китай'),('TBoxOff','Free 2021 · Xanavi')]:
+            row=QHBoxLayout(); row.addWidget(QLabel(models),1); button=QPushButton(value); button.setIcon(ui_icon('copy')); button.clicked.connect(lambda checked=False,value=value:self.copy(value)); row.addWidget(button); extra.body.addLayout(row)
+        self.feedback=QLabel(); layout.addWidget(self.feedback)
+        close=QPushButton(main.t('Закрыть')); close.clicked.connect(self.accept); layout.addWidget(close,0,Qt.AlignmentFlag.AlignRight)
+        self.timer=QTimer(self); self.timer.timeout.connect(self.refresh); self.timer.start(15000); self.refresh()
+    def refresh(self):
+        for (label,title,button),(day,value) in zip(self.rows,engineering_passwords()):
+            title.setText(self.main.t(label)+' · '+day.strftime('%d.%m.%Y')); button.setText(value); button.setProperty('password',value)
+            button.setAccessibleName(self.main.t(label)+' · '+value)
+    def copy(self,value):
+        QApplication.clipboard().setText(value); self.feedback.setText(self.main.t('Скопировано'))
+
 class MainWindow(QMainWindow):
-    def __init__(self, demo=False, smoke=False):
-        super().__init__(); self.demo = demo; self.smoke = smoke; self.closing = False
-        self.settings = QSettings('VoyahManager', 'Voyah Manager' + (' QA' if smoke else '') + (' Demo' if demo else ''))
+    def __init__(self, demo=None, smoke=False):
+        super().__init__(); self.demo = (str(QSettings('VoyahManager','Voyah Manager').value('runtime/demo_enabled','false')).lower()=='true') if demo is None else bool(demo); self.smoke = smoke; self.closing = False
+        self.settings = QSettings('VoyahManager', 'Voyah Manager' + (' QA' if smoke else '') + (' Demo' if self.demo else ''))
         self.lang = self.settings.value('language', 'ru'); self.tools = Tools(); self.runner = Runner(self)
-        self.demo_backend = DemoBackend(self) if demo else None
+        self.demo_backend = DemoBackend(self) if self.demo else None
         self.target: Target | None = None; self.profile = Profile(); self.privilege = 'shell'; self.su_prefix = ['su', 'sh', '-c']
         self.busy = False; self.cancel_requested = False; self.active_job = None; self.workers = set()
         self.binding = []; self.devices = []; self.probing = False; self.operation_name = ''
@@ -1543,6 +1609,7 @@ class MainWindow(QMainWindow):
         self.admin_shortcut = QShortcut(QKeySequence('Ctrl+Shift+Alt+A'), self, activated=self.open_admin)
         available = QApplication.primaryScreen().availableGeometry(); self.setMinimumSize(min(820,available.width()-32),min(620,available.height()-32)); self.resize(min(1400, available.width()-32), min(940, available.height()-32))
         self.poll = QTimer(self); self.poll.timeout.connect(self.refresh_devices); self.poll.start(5000)
+        self.password_timer=QTimer(self); self.password_timer.timeout.connect(self.update_engineering_password); self.password_timer.start(15000); self.update_engineering_password()
         QTimer.singleShot(100, self.startup)
 
     def t(self, text, **values): return tr(text, self.lang, **values)
@@ -1576,8 +1643,9 @@ class MainWindow(QMainWindow):
         header=QFrame(); self.header_frame=header; header.setObjectName('header'); header.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum); h=QVBoxLayout(header); h.setContentsMargins(16,12,16,12); h.setSpacing(12)
         row=QHBoxLayout(); row.setSpacing(12)
         self.status_dot=StatusDot(); row.addWidget(self.status_dot)
-        status=QVBoxLayout(); status.setSpacing(2); self.vehicle_label=self.bind(QLabel(),'Ваш автомобиль'); self.vehicle_label.setStyleSheet('font-weight:600;background:transparent;'); status.addWidget(self.vehicle_label)
+        status=QVBoxLayout(); status.setSpacing(2); self.vehicle_label=self.bind(QLabel(),'Ваш автомобиль'); self.vehicle_label.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred); self.vehicle_label.setStyleSheet('font-weight:600;background:transparent;'); status.addWidget(self.vehicle_label)
         self.connection_status=QLabel(); self.connection_status.setObjectName('subtitle'); self.connection_status.setWordWrap(True); status.addWidget(self.connection_status); row.addLayout(status,1)
+        self.engineering_button=QPushButton(); self.engineering_button.setIcon(ui_icon('shield')); self.engineering_button.clicked.connect(self.show_engineering_passwords); row.addWidget(self.engineering_button)
         self.connect_btn=self.button('Подключить',self.connect_device,True,icon='link'); row.addWidget(self.connect_btn)
         self.connection_toggle=self.button('Настройки подключения и устройства',lambda:self.connection_disclosure.setExpanded(not self.connection_disclosure.expanded),icon='settings')
         self.connection_toggle.setText(''); self.connection_toggle.setFixedSize(44,44); row.addWidget(self.connection_toggle)
@@ -1684,12 +1752,43 @@ class MainWindow(QMainWindow):
     def resizeEvent(self,event):
         super().resizeEvent(event)
         if not hasattr(self,'sidebar'): return
+        self.update_engineering_password()
         compact=self.width()<1120; self.sidebar_panel.setFixedWidth(72 if compact else 240); self.brand_label.setVisible(not compact); self.sidebar_version.setVisible(not compact)
         self.sidebar_panel.layout().setContentsMargins(8 if compact else 12,20,8 if compact else 12,16)
         self.about_button.setText('' if compact else self.t('О приложении')); self.about_button.setFixedWidth(44 if compact else 214)
         for item,key in self.group_items: item.setText('' if compact else self.t(key)); item.setSizeHint(QSize(40 if compact else 180,8 if compact else 32))
         for key,item in self.section_items.items():
             item.setText('' if compact else self.t(SECTION_NAMES[key])); item.setSizeHint(QSize(44 if compact else 206,52 if compact or key!='apps' else 68))
+
+    def update_engineering_password(self):
+        if not hasattr(self,'engineering_button'): return
+        day,value=engineering_passwords()[0]
+        self.engineering_button.setText(self.t('Инженерное меню · {password}',password=value) if self.width()>=1200 else value)
+        self.engineering_button.setToolTip(self.t('Пекин · {date}. Нажмите, чтобы посмотреть и скопировать пароль.',date=day.strftime('%d.%m.%Y')))
+        self.engineering_button.setAccessibleName(self.t('Пароль инженерного меню')+' · '+value)
+
+    def show_engineering_passwords(self):
+        EngineeringPasswordDialog(self).exec()
+
+    def launch_application(self, args):
+        command=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
+        started=QProcess.startDetached(sys.executable,command+args,str(APP_DIR))
+        return bool(started[0] if isinstance(started,tuple) else started)
+
+    def set_demo_mode(self, enabled):
+        enabled=bool(enabled)
+        inspector=self.pages['inspector']
+        if self.busy or self.probing or self.runner.jobs or self.workers or inspector.streams:
+            self.error(self.t('Сначала завершите текущее действие и остановите наблюдение.'),modal=False); return False
+        preferences=QSettings('VoyahManager','Voyah Manager'); old=preferences.value('runtime/demo_enabled','false')
+        preferences.setValue('runtime/demo_enabled',enabled); preferences.sync()
+        if enabled==self.demo:
+            self.notice(self.t('Настройка сохранена')); return True
+        if not self.launch_application([]):
+            preferences.setValue('runtime/demo_enabled',old); preferences.sync()
+            self.error(self.t('Не удалось перезапустить программу. Настройка не изменена.'),modal=False); return False
+        if self.admin_dialog: self.admin_dialog.accept()
+        QTimer.singleShot(0,self.close); return True
 
     def open_admin(self):
         if self.admin_dialog:
@@ -1711,7 +1810,7 @@ class MainWindow(QMainWindow):
             getattr(obj,method)(self.t(key))
             if obj.property('icon_only'): obj.setText('')
             if obj.property('help_key'): update_help(obj,self)
-        self.connection_toggle.setText('')
+        self.connection_toggle.setText(''); self.update_engineering_password()
         for key,page in self.pages.items():
             page.retranslate(); self.section_items[key].setToolTip(self.t(SECTION_HELP[key]))
         self.journal_toggle.setText(self.t('Журнал операций'))
@@ -2116,7 +2215,7 @@ class MainWindow(QMainWindow):
             event.ignore(); return
         if self.recipe and self.recipe.running:
             self.recipe.close_after = True; self.recipe.cancel(); self.notice(self.t('Восстановление состояния перед закрытием…')); event.ignore(); return
-        self.closing = True; self.poll.stop(); self.catalog.timer.stop(); self.web.cancel_all(); self.cancel_requested = True; self.pages['installer'].service.cancel_event.set()
+        self.closing = True; self.password_timer.stop(); self.poll.stop(); self.catalog.timer.stop(); self.web.cancel_all(); self.cancel_requested = True; self.pages['installer'].service.cancel_event.set()
         if getattr(self,'install_service',None): self.install_service.cancel_event.set()
         for page in self.pages.values():
             if hasattr(page, 'stop_streams'): page.stop_streams()
@@ -2255,37 +2354,41 @@ class InspectorPage(Page):
         layout.addStretch(1)
 
     def _build_capture(self):
-        layout = self._section('Кнопки руля')
+        layout = self._section('Кнопки руля'); layout.setSpacing(12); layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         card = self._card(layout, 'Что делает кнопка руля?', 'Начните запись, нажмите нужную кнопку в автомобиле и дождитесь результата.')
-        steps=FlowLayout()
-        for step in ('1. Начните запись', '2. Нажмите кнопку руля', '3. Посмотрите результат'):
-            label=self.label(step,'badge'); steps.addWidget(label)
-        card.addLayout(steps)
-        self.countdown=self.label('6 секунд','countdown'); self.bind(self.countdown,'Время записи','setAccessibleName'); card.addWidget(self.countdown)
-        self.capture_state_label = QLabel(); self.capture_state_label.setObjectName('section'); self.capture_state_label.setWordWrap(True); card.addWidget(self.capture_state_label)
-        self.capture_progress = QProgressBar(); self.capture_progress.setRange(0, 60); self.capture_progress.setValue(0); self.capture_progress.setTextVisible(False)
-        self.capture_progress.setFixedHeight(8); card.addWidget(self.capture_progress)
-        actions = FlowLayout(); actions.setSpacing(10)
-        self.capture_btn = self.button('Начать запись на 6 секунд', self.capture, True, icon='steering', help_key='Записывает события в течение шести секунд. Сразу после начала нажмите нужную кнопку на руле.')
-        self.capture_cancel_btn = self.button('Отменить', self.main.cancel_operation, icon='stop', help_key='Останавливает текущую запись. Можно сразу начать новую.')
-        self.capture_cancel_btn.setEnabled(False)
-        actions.addWidget(self.capture_btn); actions.addWidget(self.capture_cancel_btn)
-        self.capture_save_btn = self.button('Сохранить запись', lambda: self.save_text(self.full_capture, 'voyah-capture.txt'), icon='save', help_key='Сохраняет все полученные сообщения, включая скрытые в других группах.')
-        self.capture_open_btn = self.button('Открыть в Блокноте', lambda: self.save_text(self.full_capture, 'voyah-capture.txt', True), help_key='Сохраняет запись на компьютер и открывает её в Блокноте.')
-        self.capture_save_btn.setEnabled(False); self.capture_open_btn.setEnabled(False)
-        actions.addWidget(self.capture_save_btn); actions.addWidget(self.capture_open_btn); card.addLayout(actions)
-        self.capture_summary = QLabel(); self.capture_summary.setObjectName('muted'); self.capture_summary.setWordWrap(True); card.addWidget(self.capture_summary)
-        self.capture_tabs = QTabWidget(); self.capture_tabs.setDocumentMode(True); self.capture_tabs.setObjectName('resultTabs')
-        self.capture_views = [logbox() for _ in range(4)]; self.capture_empty = []; self.capture_stacks = []
-        descriptions = ('Какие приложения и экраны открылись во время записи.', 'Сообщения о кнопках руля и голосовых командах.', 'Действия, которые автомобиль выполняет без открытия нового окна.', 'Все сообщения, полученные во время записи.')
-        for key, description, view in zip(self.CAPTURE_KEYS, descriptions, self.capture_views):
-            page = QWidget(); body = QVBoxLayout(page); body.setContentsMargins(0, 12, 0, 0); body.setSpacing(10)
-            body.addWidget(self.hint(description)); stack = QStackedWidget(); stack.setMinimumHeight(240)
-            empty_page = QWidget(); empty_body = QVBoxLayout(empty_page); empty_body.setContentsMargins(0, 0, 0, 0)
-            empty = self._empty(empty_body, 'Здесь появится результат', 'Нажмите «Начать запись» и затем нужную кнопку на руле.', 'steering')
-            stack.addWidget(empty_page); stack.addWidget(view); body.addWidget(stack, 1)
-            self.capture_empty.append(empty); self.capture_stacks.append(stack); self.capture_tabs.addTab(page, self.t(key))
-        card.addWidget(self.capture_tabs, 1)
+        self.capture_controls_card=card.parentWidget(); self.capture_controls_card.setMaximumWidth(1060)
+        self.capture_controls_card.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum); card.setAlignment(Qt.AlignmentFlag.AlignTop)
+        timer_row=QHBoxLayout(); timer_row.setSpacing(16)
+        self.countdown=self.label('6 секунд','countdown'); self.countdown.setStyleSheet('font-size:24pt;font-weight:700;color:#00B4D8;background:transparent;')
+        self.bind(self.countdown,'Время записи','setAccessibleName'); timer_row.addWidget(self.countdown)
+        self.capture_state_label=QLabel(); self.capture_state_label.setObjectName('subtitle'); self.capture_state_label.setWordWrap(True); timer_row.addWidget(self.capture_state_label,1); card.addLayout(timer_row)
+        self.capture_progress=QProgressBar(); self.capture_progress.setRange(0,60); self.capture_progress.setValue(0); self.capture_progress.setTextVisible(False); self.capture_progress.setFixedHeight(8); card.addWidget(self.capture_progress)
+        actions=FlowLayout(); actions.setSpacing(8)
+        self.capture_btn=self.button('Начать запись на 6 секунд',self.capture,True,icon='steering',help_key='Записывает события в течение шести секунд. Сразу после начала нажмите нужную кнопку на руле.')
+        self.capture_cancel_btn=self.button('Отменить',self.main.cancel_operation,icon='stop',help_key='Останавливает текущую запись. Можно сразу начать новую.')
+        self.capture_cancel_btn.setEnabled(False); actions.addWidget(self.capture_btn); actions.addWidget(self.capture_cancel_btn)
+        self.capture_save_btn=self.button('Сохранить запись',lambda:self.save_text(self.full_capture,'voyah-capture.txt'),icon='save',help_key='Сохраняет все полученные сообщения, включая скрытые в других группах.')
+        self.capture_open_btn=self.button('Открыть в Блокноте',lambda:self.save_text(self.full_capture,'voyah-capture.txt',True),icon='file',help_key='Сохраняет запись на компьютер и открывает её в Блокноте.')
+        for button,key in [(self.capture_save_btn,'Сохранить запись'),(self.capture_open_btn,'Открыть в Блокноте')]:
+            button.setProperty('icon_only',True); button.setText(''); button.setFixedSize(44,44); self.bind(button,key,'setAccessibleName'); button.setEnabled(False); actions.addWidget(button)
+        card.addLayout(actions)
+        results=self._card(layout,'Результат записи'); self.capture_results_card=results.parentWidget(); self.capture_results_card.setMaximumWidth(1060)
+        self.capture_results_card.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum); results.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.capture_idle_hint=self.hint('После записи здесь появятся найденные события.'); results.addWidget(self.capture_idle_hint)
+        self.capture_summary=QLabel(); self.capture_summary.setObjectName('subtitle'); self.capture_summary.setWordWrap(True); results.addWidget(self.capture_summary)
+        self.capture_tabs=QTabWidget(); self.capture_tabs.setDocumentMode(False); self.capture_tabs.setObjectName('captureResults')
+        self.capture_tabs.setStyleSheet('QTabWidget#captureResults::pane { border:1px solid #35414F; border-radius:12px; background:#1C1F26; padding:4px; }')
+        self.capture_views=[logbox() for _ in range(4)]; self.capture_empty=[]; self.capture_stacks=[]
+        descriptions=('Какие приложения и экраны открылись во время записи.','Сообщения о кнопках руля и голосовых командах.','Действия, которые автомобиль выполняет без открытия нового окна.','Все сообщения, полученные во время записи.')
+        for key,description,view in zip(self.CAPTURE_KEYS,descriptions,self.capture_views):
+            page=QWidget(); page.setStyleSheet('background:transparent;'); body=QVBoxLayout(page); body.setContentsMargins(8,8,8,8); body.setSpacing(8)
+            stack=QStackedWidget(); stack.setMinimumHeight(100)
+            empty_page=QWidget(); empty_body=QVBoxLayout(empty_page); empty_body.setContentsMargins(0,0,0,0)
+            empty=self._empty(empty_body,'Здесь появится результат','Нажмите «Начать запись» и затем нужную кнопку на руле.','steering')
+            empty.emblem.hide(); empty.layout().setContentsMargins(12,8,12,8); empty.title.setStyleSheet('font-size:11pt;font-weight:600;background:transparent;')
+            stack.addWidget(empty_page); stack.addWidget(view); body.addWidget(stack,1)
+            self.capture_empty.append(empty); self.capture_stacks.append(stack); self.capture_tabs.addTab(page,self.t(key)); self.capture_tabs.setTabToolTip(len(self.capture_empty)-1,self.t(description))
+        self.capture_tabs.setFixedHeight(250); results.addWidget(self.capture_tabs); layout.addStretch(1)
 
     def _build_live(self):
         layout = self._section('Наблюдение')
@@ -2396,6 +2499,9 @@ class InspectorPage(Page):
         self.capture_btn.setText(self.t('Записать ещё раз' if self.capture_state in ('done', 'cancelled', 'error') else 'Начать запись на 6 секунд'))
         self.capture_summary.setText(self.t('Обработано сообщений: {count}. Одно нажатие может создавать несколько сообщений.', count=self.capture_counts[3]) if self.capture_state == 'done' else '')
         self.capture_summary.setVisible(self.capture_state == 'done')
+        self.capture_progress.setVisible(active); self.capture_tabs.setVisible(self.capture_state=='done'); self.capture_idle_hint.setVisible(self.capture_state!='done')
+        if self.capture_state=='done':
+            self.capture_tabs.setFixedHeight(max(180,min(280,90+min(10,self.capture_counts[3])*self.capture_views[3].fontMetrics().lineSpacing())))
         for i, key in enumerate(self.CAPTURE_KEYS):
             self.capture_tabs.setTabText(i, self.t(key) + (f' · {self.capture_counts[i]}' if self.capture_state == 'done' else ''))
         self.update_actions()
@@ -2642,6 +2748,27 @@ def validate_apks(infos: list[ApkInfo], api=0):
 
 EN.update({'APK и архивы приложений. Добавленные файлы сразу появятся ниже.': 'APK files and app archives. Added files appear below immediately.', 'Уберёт все файлы из очереди. Файлы на компьютере останутся.': 'Clears the queue. Files on your computer will remain.', 'Сохранить данные': 'Keep app data', 'Выдать разрешения': 'Grant permissions', 'Разные приложения установятся по очереди.': 'Different apps are installed one at a time.', 'Все части одного приложения устанавливаются вместе.': 'All parts of one app are installed together.', 'Уберёт этот файл из очереди. Файл на компьютере останется.': 'Removes this file from the queue. The file on your computer will remain.', 'Убрать файл из списка': 'Remove file from list', 'Читаем выбранную папку…': 'Reading the selected folder…', 'Не удалось прочитать папку. Выберите файлы вручную.': 'Could not read the folder. Select files manually.', 'Добавлено: {added} · Уже в списке: {duplicates}': 'Added: {added} · Already listed: {duplicates}', 'Эти файлы уже в списке. Повторно не добавлены.': 'These files are already listed. No duplicates added.', 'Подходящие файлы не найдены. Выберите APK или архив приложения.': 'No supported files found. Choose an APK or app archive.', 'Добавлено: {added} · Пропущено: {rejected}': 'Added: {added} · Skipped: {rejected}', 'Убрано из списка: {count}': 'Removed from list: {count}'})
 
+def plan_apk_queue(paths, infos):
+    """Group splits by manifest identity, never by filenames or file count alone."""
+    if len(paths)!=len(infos): raise ValueError('APK metadata count mismatch')
+    buckets={}; groups=[]
+    for row,(path,info) in enumerate(zip(paths,infos)):
+        if info is None:
+            if Path(path).suffix.lower() not in ('.apks','.xapk','.apkm'): raise ValueError('Не удалось прочитать манифест APK.')
+            groups.append(([Path(path)],[row])); continue
+        buckets.setdefault((info.package,info.version),[]).append((row,Path(path),info))
+    for entries in buckets.values():
+        splits=[entry for entry in entries if entry[2].split]
+        if splits:
+            if sum(not info.split for row,path,info in entries)!=1:
+                raise ValueError('Для частей приложения не найден единственный основной APK. Уберите лишние версии или добавьте base.apk.')
+            if len({info.split for row,path,info in entries})!=len(entries): raise ValueError('Duplicate split names')
+            ordered=sorted(entries,key=lambda entry:(bool(entry[2].split),entry[0]))
+            groups.append(([entry[1] for entry in ordered],[entry[0] for entry in ordered]))
+        else:
+            groups.extend(([path],[row]) for row,path,info in entries)
+    return sorted(groups,key=lambda group:min(group[1]))
+
 class InstallerPage(Page):
     """A single workspace: drop, review the queue, then install."""
 
@@ -2678,7 +2805,7 @@ class InstallerPage(Page):
         self.mode = QComboBox(); self.mode_keys = ['Одно приложение', 'Несколько приложений', 'Комплект одного приложения']; self.mode.addItems([self.t(k) for k in self.mode_keys])
         self.mode.setProperty('feature', 'apk.install'); self.mode.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.bind(self.mode, 'Укажите, устанавливаете вы один файл, разные приложения или части одного приложения.', 'setToolTip')
-        controls = QHBoxLayout(); controls.setSpacing(8); controls.addWidget(self.add_button); controls.addWidget(self.folder_button); controls.addWidget(self.mode, 1); card.addLayout(controls)
+        controls = QHBoxLayout(); controls.setSpacing(8); controls.addWidget(self.add_button); controls.addWidget(self.folder_button); controls.addStretch(1); self.mode.setParent(self); self.mode.hide(); card.addLayout(controls)
         summary = QHBoxLayout(); summary.setSpacing(8)
         self.queue_summary = QLabel(); self.queue_summary.setObjectName('subtitle'); summary.addWidget(self.queue_summary)
         self.queue_feedback = QLabel(); self.queue_feedback.setWordWrap(True); summary.addWidget(self.queue_feedback, 1)
@@ -2710,7 +2837,7 @@ class InstallerPage(Page):
         action.addWidget(self.install_button); card.addLayout(action)
         self.progress = QProgressBar(self); self.progress.setValue(0); self.progress.hide(); self.log = logbox(); self.log.setParent(self); self.log.hide()
         self.service.log_message.connect(lambda text: append_log(self.log, text)); self.service.status_changed.connect(self.set_status); self.service.progress_changed.connect(self.progress.setValue)
-        self.service.progress_changed.connect(self.update_progress); self.service.finished.connect(lambda _: self.update_actions())
+        self.service.progress_changed.connect(self.update_progress); self.service.plan_changed.connect(self.mode_hint.setText); self.service.finished.connect(lambda _: self.update_actions())
         self.file_table.itemSelectionChanged.connect(self.update_actions); self.mode.currentIndexChanged.connect(self.update_mode_hint)
         self.remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.file_table); self.remove_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut); self.remove_shortcut.activated.connect(self.remove_selected)
         self.update_mode_hint(); self.update_actions()
@@ -2732,8 +2859,7 @@ class InstallerPage(Page):
             self.main.global_progress.setRange(0, 100); self.main.global_progress.setValue(value)
 
     def update_mode_hint(self):
-        keys = ['Один APK — одно приложение.', 'Разные приложения установятся по очереди.', 'Все части одного приложения устанавливаются вместе.']
-        self.mode_hint.setText(self.t(keys[self.mode.currentIndex()])); self.update_actions()
+        self.mode_hint.setText(self.t('Способ установки определится автоматически.')); self.update_actions()
 
     def update_actions(self):
         editable = self.editable()
@@ -2801,7 +2927,7 @@ class InstallerPage(Page):
         elif duplicates: self.feedback('Эти файлы уже в списке. Повторно не добавлены.', 'info')
         elif not scanning: self.feedback('Подходящие файлы не найдены. Выберите APK или архив приложения.', 'warning')
         if added and rejected: self.feedback('Добавлено: {added} · Пропущено: {rejected}', 'warning', added=added, rejected=rejected)
-        self.update_actions()
+        self.update_mode_hint()
 
     @feature_required('apk.install', 'installer')
     def add_files(self):
@@ -2831,13 +2957,13 @@ class InstallerPage(Page):
         self.scan_generation += 1
         for row in rows: self.file_table.removeRow(row); del self.files[row]
         if rows: self.feedback('Убрано из списка: {count}', 'info', count=len(rows))
-        self.update_actions()
+        self.update_mode_hint()
 
     @feature_required('apk.install', 'installer')
     def clear_files(self):
         if not self.editable(): return
         count = len(self.files); self.scan_generation += 1; self.files.clear(); self.file_table.setRowCount(0)
-        self.feedback('Убрано из списка: {count}', 'info', count=count); self.update_actions()
+        self.feedback('Убрано из списка: {count}', 'info', count=count); self.update_mode_hint()
 
     def set_status(self, rows, text, success=None):
         for row in rows:
@@ -2851,12 +2977,7 @@ class InstallerPage(Page):
     def install(self):
         if not self.main.ready(): return
         if not self.files: self.main.error(self.t('Выберите файлы для установки.')); return
-        mode = self.mode.currentIndex()
-        if mode == 0 and (len(self.files) != 1 or Path(self.files[0]).suffix.lower() != '.apk'):
-            self.main.error(self.t('Выберите один APK в одиночном режиме.')); return
-        if mode == 1 and any(Path(p).suffix.lower() != '.apk' for p in self.files): self.main.error(self.t('Архивы устанавливаются в режиме Split.')); return
-        if mode == 2 and any(Path(p).suffix.lower() != '.apk' for p in self.files) and len(self.files) != 1:
-            self.main.error(self.t('Для продолжения нужен один комплект приложения.')); return
+        mode = 3 if len(self.files)>1 else 0
         self.scan_generation += 1; self.log.clear(); self.progress.setValue(0)
         if self.service.start(self.files,mode,[flag for flag,check in zip(('-r','-d','-g'),self.flags) if check.isChecked()]): self.update_actions()
 
@@ -2864,6 +2985,7 @@ class InstallService(QObject):
     log_message = Signal(str)
     status_changed = Signal(object,str,object)
     progress_changed = Signal(int)
+    plan_changed = Signal(str)
     finished = Signal(bool)
     def __init__(self, main):
         super().__init__(main); self.main = main; self.cancel_event = threading.Event(); self.tempdirs = []; self.current_infos = []; self.obb = []
@@ -2881,16 +3003,40 @@ class InstallService(QObject):
         self.install_profile = copy.deepcopy(self.main.profile); self.install_flags = flags if flags is not None else ['-r','-g']
         self.expected_package = expected_package; self.post_install = post_install or []
         self.groups = [([Path(p)],[i]) for i,p in enumerate(files)] if mode == 1 else [([Path(p) for p in files],list(range(len(files))))]
+        self.auto_mode = mode == 3; self.auto_files = [Path(p) for p in files]
         self.group_index = 0; self.any_failed = False; self.current_rows = self.groups[0][1]
         def state(result):
             if not result.ok or result.text != 'device': self.group_error(result.text or 'device offline'); return
-            self.prepare_group()
+            if self.auto_mode: self.plan_auto_queue()
+            else: self.prepare_group()
         def waited(result):
             if not result.ok:
                 self.set_status(self.current_rows,self.t('Ошибка'),False); self.finish(False); self.main.error(self.t(explain_error(result.text)),result.text); return
             self.main.active_job = self.main.adb(['get-state'],state,target=self.install_target,timeout=8000)
         self.main.active_job = self.main.adb(['wait-for-device'],waited,target=self.install_target,timeout=20000)
         return True
+
+    def plan_auto_queue(self):
+        self.auto_infos=[]; self.set_status(list(range(len(self.auto_files))),self.t('Проверяем состав выбранных APK…'))
+        def failed(message):
+            self.write_log(message+'\n'); self.set_status(list(range(len(self.auto_files))),self.t('Отменено') if self.main.cancel_requested else self.t('Ошибка'),False); self.finish(False)
+        def next_file(index=0):
+            if self.main.cancel_requested or self.cancel_event.is_set(): failed(self.t('Отменено')); return
+            if index==len(self.auto_files):
+                try: self.groups=plan_apk_queue(self.auto_files,self.auto_infos)
+                except ValueError as error: failed(self.t(str(error))); return
+                self.group_index=0; self.current_rows=self.groups[0][1]
+                text=self.t('Установок: {apps} · Комплектов из частей: {bundles}',apps=len(self.groups),bundles=sum(len(paths)>1 or paths[0].suffix.lower()!='.apk' for paths,rows in self.groups))
+                self.plan_changed.emit(text); self.write_log(text+'\n'); self.prepare_group(); return
+            path=self.auto_files[index]
+            if path.suffix.lower()!='.apk': self.auto_infos.append(None); next_file(index+1); return
+            def inspected(result):
+                if not result.ok: failed(self.t(explain_error(result.text))+'\n'+result.text); return
+                try: info=parse_badging(path,result.text)
+                except ValueError as error: failed(self.t(str(error))); return
+                self.auto_infos.append(info); next_file(index+1)
+            self.main.active_job=self.main.runner.run(self.main.tools.path('aapt2.exe'),['dump','badging',str(path)],inspected,timeout=30000)
+        next_file()
 
     def prepare_group(self):
         if self.main.cancel_requested or self.cancel_event.is_set(): self.finish(False); return
@@ -4531,6 +4677,13 @@ class AdminDialog(QDialog):
         note = QLabel(main.t('Изменения общего профиля вступают в силу после успешной публикации.')); note.setWordWrap(True); note.setObjectName('subtitle'); layout.addWidget(note)
         self.tabs = QTabWidget(); layout.addWidget(self.tabs, 1); self.checks = {}; self.lists = {}; self.entry_details = {}; self.entry_buttons={}
         features = QWidget(); form = QVBoxLayout(features); form.setContentsMargins(12, 16, 12, 16); form.setSpacing(16)
+        local, local_box = self.admin_card('На этом компьютере')
+        self.demo_check=QCheckBox(main.t('Демонстрационный режим')); self.demo_check.setChecked(main.demo)
+        local_box.addWidget(self.demo_check)
+        demo_note=QLabel(main.t('Показывает работу программы без автомобиля. Все команды автомобиля имитируются. Настройка действует только на этом компьютере.')); demo_note.setWordWrap(True); demo_note.setObjectName('subtitle'); local_box.addWidget(demo_note)
+        self.demo_apply=QPushButton(main.t('Применить и перезапустить')); self.demo_apply.setIcon(ui_icon('refresh'))
+        self.demo_apply.clicked.connect(lambda: main.set_demo_mode(self.demo_check.isChecked())); local_box.addWidget(self.demo_apply,0,Qt.AlignmentFlag.AlignLeft)
+        form.addWidget(local)
         groups = [
             ('Разделы приложения', ('catalog', 'installer', 'keyboards', 'inspector', 'files', 'apps', 'tweaks', 'terminal')),
             ('Установка и файлы', ('apk.install', 'files.write', 'keyboard.install', 'keyboard.restore')),
@@ -4678,7 +4831,7 @@ def main():
         logging.error('Unhandled exception', exc_info=(kind, value, traceback))
         if not args.smoke_dir: QMessageBox.critical(None, 'Voyah Manager', str(value))
     sys.excepthook = exception_hook
-    window = MainWindow(args.demo, bool(args.smoke_dir)); window.show()
+    window = MainWindow(True if args.demo else False if args.smoke_dir else None, bool(args.smoke_dir)); window.show()
     if args.smoke_dir:
         window.lang = 'ru'; window.language.setCurrentIndex(0); window.retranslate()
         if args.smoke_width or args.smoke_height: window.resize(args.smoke_width or window.width(),args.smoke_height or window.height())
