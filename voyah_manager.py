@@ -660,6 +660,21 @@ def update_help(widget, main, reason=None):
     widget.setToolTip(text)
 
 
+def runtime_text(text,lang):
+    """Translate the visible current state; keep historical log lines untouched."""
+    key=text if text in EN else next((ru for ru,en in EN.items() if en==text),None)
+    if key is not None: return tr(key,lang)
+    for ru,en in EN.items():
+        if '{name}' not in ru or ru.count('{')!=1: continue
+        for pattern in (ru,en):
+            before,after=pattern.split('{name}')
+            if text.startswith(before) and (not after or text.endswith(after)):
+                value=text[len(before):len(text)-len(after) if after else len(text)]
+                name=value if value not in EN and value not in EN.values() else runtime_text(value,lang)
+                return tr(ru,lang,name=name)
+    return text
+
+
 NativePushButton=QPushButton
 class VoyahButton(NativePushButton):
     def __init__(self,*args,**kwargs):
@@ -811,11 +826,15 @@ class Disclosure(QFrame):
     def setTitle(self,title): self.toggle.setText(title)
     def setExpanded(self,expanded,animate=True):
         self.expanded=bool(expanded); self.toggle.setChecked(self.expanded); self.animation.stop()
+        self.setVisible(True)
         if animate and self.main.motion.enabled:
             start=self.content.height() if self.content.isVisible() else 0; self.content.setVisible(True)
             self.animation.setStartValue(start); self.animation.setEndValue(self.content.sizeHint().height() if expanded else 0); self.animation.start()
         else: self._settled()
-    def _settled(self): self.content.setMaximumHeight(16777215 if self.expanded else 0); self.content.setVisible(self.expanded)
+    def _settled(self):
+        self.content.setMaximumHeight(16777215 if self.expanded else 0); self.content.setVisible(self.expanded)
+        owns_toggle=self.toggle.parentWidget() is self and not self.toggle.isHidden()
+        self.setVisible(self.expanded or owns_toggle); self.updateGeometry()
 
 
 class AnimatedStack(QStackedWidget):
@@ -1525,7 +1544,7 @@ class MainWindow(QMainWindow):
         self.about_button=self.button('О приложении',self.about,icon='info'); side.addWidget(self.about_button)
         outer.addWidget(self.sidebar_panel)
         right=QVBoxLayout(); right.setSpacing(16); outer.addLayout(right,1)
-        header=QFrame(); header.setObjectName('header'); h=QVBoxLayout(header); h.setContentsMargins(16,12,16,12); h.setSpacing(12)
+        header=QFrame(); self.header_frame=header; header.setObjectName('header'); header.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Maximum); h=QVBoxLayout(header); h.setContentsMargins(16,12,16,12); h.setSpacing(12)
         row=QHBoxLayout(); row.setSpacing(12)
         self.status_dot=StatusDot(); row.addWidget(self.status_dot)
         status=QVBoxLayout(); status.setSpacing(2); self.vehicle_label=self.bind(QLabel(),'Ваш автомобиль'); self.vehicle_label.setStyleSheet('font-weight:600;background:transparent;'); status.addWidget(self.vehicle_label)
@@ -1550,8 +1569,8 @@ class MainWindow(QMainWindow):
         tools_row=FlowLayout(); tools_row.addWidget(self.button('USB → Wi-Fi :5555',self.usb_wifi,icon='wifi')); tools_row.addWidget(self.button('Выбрать ADB',self.choose_adb,icon='folder')); tools_row.addWidget(self.button('Встроенный ADB',self.use_bundled,icon='archive')); tools_row.addWidget(self.button('Перезапуск ADB',self.restart_adb,icon='refresh')); details.addLayout(tools_row)
         self.adb_label=QLabel(); self.adb_label.setObjectName('subtitle'); self.adb_label.setWordWrap(True); self.adb_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); details.addWidget(self.adb_label)
         access=FlowLayout(); self.root_button=self.button('Расширенный режим',self.root_menu,icon='shield'); access.addWidget(self.root_button); self.reboot_button=self.button('Перезагрузка',self.reboot_menu,icon='recovery'); access.addWidget(self.reboot_button)
-        self.reduce_motion=self.bind(QCheckBox(),'Уменьшить анимацию'); self.reduce_motion.setChecked(self.motion.reduced or not self.motion.system_enabled); self.reduce_motion.toggled.connect(self.motion.set_reduced); self.reduce_motion.setProperty('help_key','Убирает плавные переходы и раскрытие меню. Все действия остаются доступными.'); access.addWidget(self.reduce_motion); details.addLayout(access)
-        h.addWidget(self.connection_disclosure); right.addWidget(header)
+        self.reduce_motion=self.bind(QCheckBox(),'Уменьшить анимацию'); self.reduce_motion.setChecked(self.motion.reduced); self.reduce_motion.toggled.connect(self.motion.set_reduced); self.reduce_motion.setProperty('help_key','Убирает плавные переходы и раскрытие меню. Все действия остаются доступными.'); access.addWidget(self.reduce_motion); details.addLayout(access)
+        h.addWidget(self.connection_disclosure); self.connection_disclosure.hide(); right.addWidget(header)
         if self.demo:
             badge=self.bind(QLabel(),'Демонстрационный режим • команды имитируются'); badge.setStyleSheet('color:#F5CE7E;padding:8px 12px;background:#332D22;border-radius:12px;'); right.addWidget(badge)
         titles=QVBoxLayout(); titles.setSpacing(4); self.section_title=QLabel(); self.section_title.setObjectName('title'); titles.addWidget(self.section_title); self.section_description=QLabel(); self.section_description.setWordWrap(True); self.section_description.setObjectName('subtitle'); titles.addWidget(self.section_description); right.addLayout(titles)
@@ -1578,7 +1597,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn=self.button('Отменить задание',self.cancel_operation,icon='stop'); self.cancel_btn.setEnabled(False); operation.addWidget(self.cancel_btn)
         self.log_disclosure=Disclosure(self.t('Журнал операций'),self); self.log_disclosure.toggle.setIcon(ui_icon('terminal')); self.log_disclosure.toggle.setProperty('help_key',ACTION_HELP['Журнал операций']); self.journal_toggle=self.log_disclosure.toggle
         operation.addWidget(self.journal_toggle); d.addLayout(operation)
-        self.shared_log=logbox(); self.shared_log.setMinimumHeight(120); self.shared_log.setMaximumHeight(220); self.log_disclosure.body.addWidget(self.shared_log); d.addWidget(self.log_disclosure)
+        self.shared_log=logbox(); self.shared_log.setMinimumHeight(120); self.shared_log.setMaximumHeight(220); self.log_disclosure.body.addWidget(self.shared_log); d.addWidget(self.log_disclosure); self.log_disclosure.hide()
         self.notice_label=QLabel(); self.notice_label.setObjectName('subtitle'); self.notice_label.setWordWrap(True); self.notice_label.setMaximumHeight(56); d.addWidget(self.notice_label)
         right.addWidget(dock); self.select_section('catalog'); self.mode_changed(); self.apply_policy()
 
@@ -1672,6 +1691,9 @@ class MainWindow(QMainWindow):
         for key,page in self.pages.items():
             page.retranslate(); self.section_items[key].setToolTip(self.t(SECTION_HELP[key]))
         self.journal_toggle.setText(self.t('Журнал операций'))
+        self.operation_name=runtime_text(self.operation_name,self.lang)
+        self.operation_label.setText(runtime_text(self.operation_label.text(),self.lang) if self.busy else self.t('Готово к работе'))
+        self.notice_label.setText(runtime_text(self.notice_label.text(),self.lang))
         self.section_changed(self.sidebar.currentItem())
         compact=self.width()<1120
         for key,item in self.section_items.items():

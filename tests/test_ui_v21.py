@@ -224,3 +224,23 @@ def test_animated_navigation_and_popups_remain_responsive(window,qtbot):
     window.language.hidePopup(); window.connection_disclosure.setExpanded(False); qtbot.waitUntil(lambda: not window.connection_details.isVisible(),timeout=1500)
     assert not window.connection_details.isVisible()
     window.smoke=True
+
+
+def test_connection_collapse_releases_header_height(window,qtbot):
+    window.resize(1300,900); window.select_section('tweaks'); qtbot.wait(50)
+    window.connection_disclosure.setExpanded(True,False); qtbot.wait(50)
+    expanded=window.header_frame.height()
+    window.connection_disclosure.setExpanded(False,False)
+    qtbot.waitUntil(lambda: window.header_frame.height()<expanded-100,timeout=1500)
+    assert window.header_frame.height()<130 and not window.connection_disclosure.isVisible()
+    window.log_disclosure.setExpanded(True,False); window.log_disclosure.setExpanded(False,False)
+    assert not window.log_disclosure.isVisible() and window.journal_toggle.isVisible()
+
+
+def test_current_operation_state_follows_language(window):
+    window.language.setCurrentIndex(0)
+    window.operation_name=window.t('Встроенный ADB'); window.notice(window.t('Готово: {name}',name=window.operation_name))
+    window.language.setCurrentIndex(1)
+    assert window.operation_label.text()==v.EN['Готово к работе']
+    assert window.notice_label.text()==v.EN['Готово: {name}'].format(name=v.EN['Встроенный ADB'])
+    assert window.operation_name==v.EN['Встроенный ADB']

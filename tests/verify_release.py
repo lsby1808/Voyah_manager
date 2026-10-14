@@ -23,6 +23,9 @@ for name,dpr,api in [('100',1.0,30),('125',1.25,30),('150',1.5,30),('offline',1.
 suite=ET.parse(root/'qa-v21-tests.xml').find('testsuite')
 count=int(suite.get('tests'))
 assert count>=124 and suite.get('failures')=='0' and suite.get('errors')=='0'
+ui=ET.parse(root/'qa-v21-ui-final.xml').find('testsuite')
+assert ui.get('failures')=='0' and ui.get('errors')=='0'
+count=len({(case.get('classname'),case.get('name')) for report in (suite,ui) for case in report.findall('testcase')})
 publication=json.loads((root/'qa-v21-publication.json').read_text()) if (root/'qa-v21-publication.json').exists() else {}
 manifest={'version':'2.1.0','file':executable.name,'size_bytes':executable.stat().st_size,
           'sha256':digest(executable),'source_sha256':source,'authenticode':'NotSigned',
