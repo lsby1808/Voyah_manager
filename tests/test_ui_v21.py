@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, Qt, QMimeData, QUrl
 from PySide6.QtWidgets import QApplication, QWidget, QScrollArea
 
 from test_manager import window
@@ -263,3 +263,24 @@ def test_failed_process_start_does_not_leave_a_dead_job(qtbot):
     assert not results[0].ok and results[0].code==-1
     assert job.ended and not runner.jobs
     runner.cancel_all(); job.cancel()
+
+
+@pytest.mark.parametrize('destination',['installer','drop_area','files'])
+def test_drop_of_browser_link_never_uses_current_directory(window,monkeypatch,destination):
+    data=QMimeData(); data.setUrls([QUrl('https://example.com/app.apk')]); operations=[]
+    class Drop:
+        def mimeData(self): return data
+        def acceptProposedAction(self): pass
+    monkeypatch.setattr(window,'background',lambda *args:operations.append('scan directory'))
+    monkeypatch.setattr(window.pages['files'],'transfer',lambda *args,**kwargs:operations.append('push'))
+    target=window.pages['installer'].drop_area if destination=='drop_area' else window.pages[destination]
+    target.dropEvent(Drop())
+    assert not operations and not window.pages['installer'].files
+
+
+def test_empty_file_argument_is_not_the_current_directory(window,monkeypatch):
+    operations=[]
+    monkeypatch.setattr(window,'background',lambda *args:operations.append('scan directory'))
+    monkeypatch.setattr(window.pages['files'],'transfer',lambda *args,**kwargs:operations.append('push'))
+    window.pages['installer'].add_paths(['']); window.pages['files'].push_paths([''])
+    assert not operations and not window.pages['installer'].files

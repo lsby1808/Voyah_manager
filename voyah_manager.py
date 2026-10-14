@@ -2076,7 +2076,7 @@ class MainWindow(QMainWindow):
         btn = QPushButton(self.t('Закрыть')); btn.clicked.connect(dialog.accept); layout.addWidget(btn); dialog.exec()
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls(): event.acceptProposedAction()
+        if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()): event.acceptProposedAction()
 
     def dropEvent(self, event):
         paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
@@ -2624,13 +2624,13 @@ class InstallerPage(Page):
             heading = page.label('Перетащите файлы приложения сюда', 'section'); heading.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(heading)
             caption = page.hint('Подойдут APK и готовые комплекты приложений. Можно выбрать несколько файлов или целую папку.'); caption.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(caption)
         def dragEnterEvent(self, event):
-            if event.mimeData().hasUrls() and not self.page.main.busy and self.page.main.allowed('apk.install', False):
+            if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()) and not self.page.main.busy and self.page.main.allowed('apk.install', False):
                 self.setProperty('dragActive', True); self.style().unpolish(self); self.style().polish(self); event.acceptProposedAction()
         def dragLeaveEvent(self, event):
             self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
         def dropEvent(self, event):
             self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
-            self.paths_dropped.emit([url.toLocalFile() for url in event.mimeData().urls()]); event.acceptProposedAction()
+            self.paths_dropped.emit([url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile() and url.toLocalFile()]); event.acceptProposedAction()
 
     def __init__(self, main):
         super().__init__(main); self.setAcceptDrops(True); self.files = []; self.service = InstallService(main); self.cancel_event = self.service.cancel_event
@@ -2690,15 +2690,16 @@ class InstallerPage(Page):
         self.empty_queue.title.setText(self.t('Файлы ещё не выбраны')); self.empty_queue.description.setText(self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».')); self.update_mode_hint(); self.update_actions()
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls(): event.acceptProposedAction()
+        if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()): event.acceptProposedAction()
 
     def dropEvent(self, event):
-        self.add_paths([url.toLocalFile() for url in event.mimeData().urls()]); event.acceptProposedAction()
+        self.add_paths([url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile() and url.toLocalFile()]); event.acceptProposedAction()
 
     @feature_required('apk.install', 'installer')
     def add_paths(self, paths):
         if self.main.busy: return
         for path in paths:
+            if not path: continue
             p = Path(path)
             if p.is_dir():
                 self.main.background(lambda d=p: sorted(d.glob('*.apk')), lambda result, err: self.add_paths(result or [])); continue
@@ -3034,10 +3035,10 @@ class ExplorerPage(Page):
             self.empty_files.description.setText(self.t('В этой папке пока нет файлов. Можно передать их с компьютера.' if getattr(self, 'loaded', False) else 'Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.'))
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls(): event.acceptProposedAction()
+        if any(url.isLocalFile() and url.toLocalFile() for url in event.mimeData().urls()): event.acceptProposedAction()
 
     def dropEvent(self, event):
-        self.push_paths([u.toLocalFile() for u in event.mimeData().urls()]); event.acceptProposedAction()
+        self.push_paths([u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile() and u.toLocalFile()]); event.acceptProposedAction()
 
     def navigate(self, path): self.path.setText(path); self.refresh()
 
@@ -3089,6 +3090,7 @@ class ExplorerPage(Page):
 
     @feature_required('files.write', 'files')
     def push_paths(self, paths):
+        paths=[path for path in paths if path]
         if not paths or not self.main.ready(): return
         destination = self.current_path
         steps = [Step(['push', str(Path(p)), posixpath.join(destination, Path(p).name)], False, timeout=600000) for p in paths if Path(p).exists()]

@@ -111,11 +111,19 @@ jobs:
               if (error.status !== 404) throw error;
               release = (await github.rest.repos.createRelease({...context.repo, tag_name:tag, target_commitish:context.sha, name:`Voyah Manager ${manifest.version}`, body})).data;
             }
+            const tagRef = (await github.rest.git.getRef({...context.repo, ref:`tags/${tag}`})).data;
+            if (tagRef.object.sha !== context.sha) {
+              // Finalise this initial 2.1.0 candidate after the final drop-input check.
+              // Future changes to an already published version must bump its version.
+              if (tag !== 'v2.1.0' || tagRef.object.sha !== '23eb061fe32a3c122bdec2e008516e229caade36')
+                throw new Error('This version is already published from another commit. Bump the version.');
+              await github.rest.git.updateRef({...context.repo, ref:`tags/${tag}`, sha:context.sha, force:true});
+            }
             const assets = await github.paginate(github.rest.repos.listReleaseAssets, {...context.repo, release_id:release.id});
             for (const name of fs.readdirSync('dist')) {
-              const existing = assets.find(asset => asset.name === name);
+              const existing = assets.find(asset => asset.name === name || asset.name === name.replaceAll(' ','.'));
               if (existing) await github.rest.repos.deleteReleaseAsset({...context.repo, asset_id:existing.id});
               const data = fs.readFileSync(`dist/${name}`);
               await github.rest.repos.uploadReleaseAsset({...context.repo, release_id:release.id, name, data, headers:{'content-type':'application/octet-stream','content-length':data.length}});
             }
-            await github.rest.repos.updateRelease({...context.repo, release_id:release.id, body});
+            await github.rest.repos.updateRelease({...context.repo, release_id:release.id, body, target_commitish:context.sha});
