@@ -93,6 +93,15 @@ def test_restart_uses_an_independent_detached_process_environment(qtbot,monkeypa
     data=json.loads(marker.read_text());assert data=={'reset':'1','cwd':str(tmp_path)}
     assert os.environ.get('PYINSTALLER_RESET_ENVIRONMENT')==before
 
+def test_demo_journal_and_backups_have_a_separate_runtime_profile(tmp_path):
+    real=v.runtime_data_directory(tmp_path,False);demo=v.runtime_data_directory(tmp_path,True)
+    (real/'backups').mkdir(parents=True);(demo/'backups').mkdir(parents=True)
+    (real/'operation.json').write_text('real car recovery');(real/'backups'/'stock.apk').write_bytes(b'real keyboard')
+    (demo/'operation.json').write_text('simulated recovery');(demo/'backups'/'stock.apk').write_bytes(b'simulated keyboard')
+    assert (real/'operation.json').read_text()=='real car recovery'
+    assert (real/'backups'/'stock.apk').read_bytes()==b'real keyboard'
+    assert demo!=real and real not in demo.glob('operation.json')
+
 def apk(path,pkg='com.test.one',version='1',split=''):
     return v.ApkInfo(Path(path),pkg,version,28,split)
 

@@ -4821,18 +4821,24 @@ class AdminDialog(QDialog):
             entry = self.draft[kind][row]; self.entry_details[kind].setText(entry.get('description', '') + '\nID: ' + entry['id'])
         else: self.entry_details[kind].setText(self.main.t('Выберите запись для изменения или добавьте новую.'))
 
+def runtime_data_directory(base, demo):
+    return Path(base) / 'demo' if demo else Path(base)
+
 def setup_logging():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(DATA_DIR / 'voyah-manager.log', maxBytes=3_000_000, backupCount=3, encoding='utf-8')
     logging.basicConfig(level=logging.INFO, handlers=[handler], format='%(asctime)s %(levelname)s %(message)s')
 
 def main():
+    global DATA_DIR
     parser = argparse.ArgumentParser(description='Voyah Manager')
     parser.add_argument('--demo', action='store_true'); parser.add_argument('--smoke-dir', type=Path)
     parser.add_argument('--smoke-width',type=int); parser.add_argument('--smoke-height',type=int)
     parser.add_argument('--smoke-online',action='store_true')
     parser.add_argument('--bundled-adb', action='store_true'); parser.add_argument('--export-icon', type=Path)
     args = parser.parse_args()
+    runtime_demo=True if args.demo else False if args.smoke_dir else str(QSettings('VoyahManager','Voyah Manager').value('runtime/demo_enabled','false')).lower()=='true'
+    if not args.export_icon: DATA_DIR=runtime_data_directory(DATA_DIR,runtime_demo)
     setup_logging(); app = QApplication(sys.argv[:1]); app.setStyle('Fusion'); app.setStyleSheet(STYLE); app.setApplicationName('Voyah Manager'); app.setWindowIcon(make_icon())
     if args.export_icon:
         make_icon().pixmap(256, 256).save(str(args.export_icon)); return 0
@@ -4840,7 +4846,7 @@ def main():
         logging.error('Unhandled exception', exc_info=(kind, value, traceback))
         if not args.smoke_dir: QMessageBox.critical(None, 'Voyah Manager', str(value))
     sys.excepthook = exception_hook
-    window = MainWindow(True if args.demo else False if args.smoke_dir else None, bool(args.smoke_dir)); window.show()
+    window = MainWindow(runtime_demo, bool(args.smoke_dir)); window.show()
     if args.smoke_dir:
         window.lang = 'ru'; window.language.setCurrentIndex(0); window.retranslate()
         if args.smoke_width or args.smoke_height: window.resize(args.smoke_width or window.width(),args.smoke_height or window.height())
