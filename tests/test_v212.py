@@ -46,7 +46,8 @@ def test_demo_choice_is_local_and_restarts_without_external_commands(window,qtbo
     qtbot.waitUntil(lambda:not window.workers and not window.probing)
     prefs=isolated_demo_settings(monkeypatch,tmp_path);calls=[];closed=[]
     monkeypatch.setattr(window,'launch_application',lambda args:calls.append(args) or True)
-    monkeypatch.setattr(window,'close',lambda:closed.append(True))
+    original_close=window.close
+    monkeypatch.setattr(window,'close',lambda:closed.append(True) or original_close())
     profile=dict(window.catalog.profile)
     assert window.demo and window.set_demo_mode(False)
     qtbot.waitUntil(lambda:bool(closed))

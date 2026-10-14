@@ -1552,6 +1552,8 @@ EN.update({
     'Пароль меняется в полночь по Пекину. Если дата в машине отличается, попробуйте вариант для соседнего дня.': 'The password changes at midnight in Beijing. If your car shows a different date, try the previous or next day.',
     'Сегодня': 'Today', 'Вчера': 'Yesterday', 'Завтра': 'Tomorrow',
     'Ранние прошивки': 'Earlier firmware',
+    'Free 2021 · МоторИнвест': 'Free 2021 · Motorinvest',
+    'Free 2023 · Китай': 'Free 2023 · China',
     'Варианты из стороннего установщика. Подходящий пароль зависит от прошивки; регистр букв важен.': 'Options found in the other installer. The correct password depends on firmware; letter case matters.',
     'Результат записи': 'Recording results',
     'После записи здесь появятся найденные события.': 'Events found during recording will appear here.',
@@ -1580,7 +1582,7 @@ class EngineeringPasswordDialog(QDialog):
         extra=Disclosure(main.t('Ранние прошивки'),main); layout.addWidget(extra)
         note=QLabel(main.t('Варианты из стороннего установщика. Подходящий пароль зависит от прошивки; регистр букв важен.')); note.setWordWrap(True); extra.body.addWidget(note)
         for value,models in [('hellomotor','Free 2021 · МоторИнвест'),('hellovoyah','Free 2021 / Free 2023'),('HelloNewVoyah2022','Free 2023 · Китай'),('TBoxOff','Free 2021 · Xanavi')]:
-            row=QHBoxLayout(); row.addWidget(QLabel(models),1); button=QPushButton(value); button.setIcon(ui_icon('copy')); button.clicked.connect(lambda checked=False,value=value:self.copy(value)); row.addWidget(button); extra.body.addLayout(row)
+            row=QHBoxLayout(); row.addWidget(QLabel(main.t(models)),1); button=QPushButton(value); button.setIcon(ui_icon('copy')); button.clicked.connect(lambda checked=False,value=value:self.copy(value)); row.addWidget(button); extra.body.addLayout(row)
         self.feedback=QLabel(); layout.addWidget(self.feedback)
         close=QPushButton(main.t('Закрыть')); close.clicked.connect(self.accept); layout.addWidget(close,0,Qt.AlignmentFlag.AlignRight)
         self.timer=QTimer(self); self.timer.timeout.connect(self.refresh); self.timer.start(15000); self.refresh()
@@ -1768,7 +1770,9 @@ class MainWindow(QMainWindow):
         self.engineering_button.setAccessibleName(self.t('Пароль инженерного меню')+' · '+value)
 
     def show_engineering_passwords(self):
-        EngineeringPasswordDialog(self).exec()
+        dialog=EngineeringPasswordDialog(self)
+        try: dialog.exec()
+        finally: dialog.timer.stop(); dialog.deleteLater()
 
     def launch_application(self, args):
         command=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
