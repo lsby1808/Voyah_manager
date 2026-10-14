@@ -62,7 +62,11 @@ def test_demo_restart_does_not_interrupt_operations_or_lose_setting(window,qtbot
     if reason=='busy': window.busy=True
     if reason=='streams': window.pages['inspector'].streams['logcat']=object()
     try:
-        assert not window.set_demo_mode(False)
+        if reason=='busy':
+            admin=v.AdminDialog(window);qtbot.addWidget(admin);admin.demo_check.setChecked(False);admin.demo_apply.click()
+            assert admin.status.text()==window.notice_label.text() and admin.status.text()
+            admin.reject()
+        else: assert not window.set_demo_mode(False)
         assert prefs.value('runtime/demo_enabled') is True
         assert bool(launched)==(reason=='failed launch')
     finally:

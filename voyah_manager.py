@@ -4686,7 +4686,7 @@ class AdminDialog(QDialog):
         local_box.addWidget(self.demo_check)
         demo_note=QLabel(main.t('Показывает работу программы без автомобиля. Все команды автомобиля имитируются. Настройка действует только на этом компьютере.')); demo_note.setWordWrap(True); demo_note.setObjectName('subtitle'); local_box.addWidget(demo_note)
         self.demo_apply=QPushButton(main.t('Применить и перезапустить')); self.demo_apply.setIcon(ui_icon('refresh'))
-        self.demo_apply.clicked.connect(lambda: main.set_demo_mode(self.demo_check.isChecked())); local_box.addWidget(self.demo_apply,0,Qt.AlignmentFlag.AlignLeft)
+        self.demo_apply.clicked.connect(lambda: (main.set_demo_mode(self.demo_check.isChecked()),self.status.setText(main.notice_label.text()))); local_box.addWidget(self.demo_apply,0,Qt.AlignmentFlag.AlignLeft)
         form.addWidget(local)
         groups = [
             ('Разделы приложения', ('catalog', 'installer', 'keyboards', 'inspector', 'files', 'apps', 'tweaks', 'terminal')),
