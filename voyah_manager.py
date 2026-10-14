@@ -1,4 +1,4 @@
-"""Voyah Manager 2.0 — single-file PySide6 Android Automotive workbench.
+"""Voyah Manager 2.1 — single-file PySide6 Android Automotive workbench.
 
 Run: python voyah_manager.py | --demo | --smoke-dir DIRECTORY
 All device commands are asynchronous QProcess jobs. No host command shell is used.
@@ -35,18 +35,19 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from PySide6.QtCore import (Qt, QObject, Signal, QProcess, QTimer, QThreadPool,
-                            QRunnable, QSettings, QUrl, QSize, QRect, QPoint)
+                            QRunnable, QSettings, QUrl, QSize, QRect, QPoint, QPointF, QRectF, QEvent,
+                            QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QVariantAnimation)
 from PySide6.QtGui import (QFont, QIcon, QPainter, QColor, QPixmap, QDesktopServices,
-                           QTextCursor, QKeySequence, QShortcut, QPen)
+                           QTextCursor, QKeySequence, QShortcut, QPen, QPalette, QPainterPath, QRegion, QAction)
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QGridLayout, QLabel, QPushButton, QLineEdit, QComboBox,
     QCheckBox, QPlainTextEdit, QTabWidget, QFrame, QScrollArea, QTableWidget,
     QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox, QInputDialog,
     QProgressBar, QSplitter, QAbstractItemView, QSpinBox, QMenu, QDialog,
-    QDialogButtonBox, QListWidget, QListWidgetItem, QStyle, QStackedWidget, QFormLayout, QToolButton, QLayout, QWidgetItem, QSizePolicy)
+    QDialogButtonBox, QListWidget, QListWidgetItem, QStyle, QStackedWidget, QFormLayout, QToolButton, QLayout, QWidgetItem, QSizePolicy, QStyleOptionButton, QGraphicsOpacityEffect)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-VERSION = '2.0.1'
+VERSION = '2.1.0'
 APP_DIR = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 DATA_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Voyah Manager'
@@ -461,47 +462,406 @@ class Tools:
                 return choice
         return ''
 
+EN.update({'Ваш автомобиль': 'Your vehicle', 'Готово к работе': 'Ready when you are', 'Автомобиль': 'Vehicle', 'Для опытных': 'Advanced', 'Уменьшить анимацию': 'Reduce animation', 'Твики': 'Tweaks', 'Терминал': 'Terminal', 'Убирает плавные переходы и раскрытие меню. Все действия остаются доступными.': 'Turns off animated transitions and menus. All actions remain available.', 'Подставляет адрес из отчёта установщика. Подходит только для прошивок с таким способом подключения.': 'Fills in the address from the installer report. Suitable only for firmware using this connection method.', 'Выберите готовое приложение — программа скачает его и установит в автомобиль.': 'Choose an app: the program downloads it and installs it in your vehicle.', 'Выберите файлы на компьютере или перетащите их сюда для установки.': 'Choose files on your computer or drop them here to install.', 'Установите выбранную клавиатуру на оба экрана или верните штатную.': 'Install a keyboard on both displays or restore the factory keyboards.', 'Узнайте, что открыто на экранах и какие события происходят в автомобиле.': 'See what is open on the displays and what happens in your vehicle.', 'Передавайте файлы между компьютером и памятью автомобиля.': 'Transfer files between your computer and the vehicle.', 'Запускайте приложения и управляйте тем, что уже установлено.': 'Launch apps and manage what is already installed.', 'Настройте размер элементов, звук и внешний вид. Здесь же доступны действия восстановления.': 'Adjust the size of controls, sound and appearance. Recovery actions are also available here.', 'Для опытных: команды выполняются на выбранном автомобиле. Проверьте их перед запуском.': 'For experienced users: commands run on the selected vehicle. Check them before running.', 'Подключает выбранный автомобиль. Для первого соединения по кабелю подтвердите запрос на экране автомобиля.': 'Connects the selected vehicle. For a first USB connection, accept the prompt on its screen.', 'Проверяет, какие автомобили сейчас доступны для подключения.': 'Checks which vehicles are available for connection.', 'Возвращает на предыдущий экран в автомобиле.': 'Returns to the previous screen in your vehicle.', 'Открывает главный экран автомобиля.': 'Opens the main vehicle screen.', 'Показывает недавно открытые приложения в автомобиле.': 'Shows recently opened apps in your vehicle.', 'Сохраняет снимок экрана автомобиля на компьютер.': 'Saves a screenshot from your vehicle to the computer.', 'Останавливает текущее действие. Уже выполненные изменения могут сохраниться.': 'Stops the current task. Changes already made may remain.', 'Позволяет выбрать файл средства связи с автомобилем на вашем компьютере.': 'Choose the connection tool on your computer.', 'Использует средство связи, которое уже входит в программу.': 'Uses the connection tool already included with this program.', 'Перезапускает связь с автомобилем, если подключение перестало отвечать.': 'Restarts the connection tool when the vehicle stops responding.', 'Подготавливает подключённый по кабелю автомобиль к работе через Wi-Fi и показывает его адреса.': 'Prepares a USB-connected vehicle for Wi-Fi and shows its addresses.', 'Открывает действия для расширенного доступа. Некоторые прошивки не разрешают такой доступ.': 'Opens advanced access actions. Some firmware does not allow this access.', 'Показывает варианты перезапуска автомобиля. Каждое действие требует подтверждения.': 'Shows vehicle restart options. Each action requires confirmation.', 'Открывает сохранённую запись действий и ошибок программы.': 'Opens the saved record of program actions and errors.', 'Показывает версию программы и сведения о её работе.': 'Shows the program version and information about how it works.', 'Показывает способ подключения, адрес автомобиля и дополнительные действия.': 'Shows the connection method, vehicle address and additional actions.', 'Показывает подробную запись выполненных действий и ответов автомобиля.': 'Shows a detailed record of actions and vehicle responses.', 'Создаст новую папку внутри открытой папки автомобиля.': 'Creates a new folder inside the currently open car folder.', 'Изменит имя одного выбранного файла или папки.': 'Renames one selected file or folder.', 'Проверит выбранный APK в памяти автомобиля и установит его как приложение.': 'Checks the selected APK in car storage and installs it as an app.', 'Удалит выбранные файлы и папки из автомобиля. Отменить это действие нельзя.': 'Deletes selected files and folders from your car. This action cannot be undone.', 'Приложение перестанет запускаться. Его можно включить обратно.': 'Stops the app from launching. You can enable it again later.', 'Снова разрешит запуск ранее отключённого приложения.': 'Allows a previously disabled app to launch again.', 'Удалит настройки и личные данные внутри приложения. Само приложение останется.': 'Deletes settings and personal data inside the app. The app itself will remain.', 'Удалит выбранное приложение из автомобиля. Сначала потребуется подтверждение.': 'Uninstalls the selected app from your car. Confirmation is required first.', 'Уберёт текст из окна терминала. Команды и их история останутся.': 'Clears the terminal window. Commands and their history will remain.', 'Сохранит весь отображаемый вывод в текстовый файл на компьютере.': 'Saves all displayed output to a text file on your computer.', 'Перетащите файлы приложения сюда': 'Drop app files here', 'Подойдут APK и готовые комплекты приложений. Можно выбрать несколько файлов или целую папку.': 'Use APK files or prepared app bundles. You can select several files or a whole folder.', 'Приложения с компьютера': 'Apps from your computer', 'Выберите файлы, проверьте список и установите их в автомобиль.': 'Choose files, check the list, then install them in your car.', 'Выбрать файлы': 'Choose files', 'Выберите один APK, несколько приложений или готовый комплект из файлов.': 'Choose one APK, several apps, or a prepared set of app files.', 'Выбрать папку': 'Choose folder', 'Добавит все APK из выбранной папки. Каждое приложение установится по очереди.': 'Adds every APK in the selected folder. Apps will be installed one after another.', 'Одно приложение': 'One app', 'Несколько приложений': 'Several apps', 'Комплект одного приложения': 'One app bundle', 'Укажите, устанавливаете вы один файл, разные приложения или части одного приложения.': 'Choose whether you are installing one file, different apps, or parts of the same app.', 'Как установить': 'Installation mode', 'Один APK — одно приложение.': 'One APK is one app.', 'Разные приложения установятся по очереди. Не выбирайте этот режим для частей одного приложения.': 'Different apps will be installed one after another. Do not use this mode for parts of one app.', 'Выберите все части одного приложения или один готовый архив. Комплект установится целиком.': 'Choose every part of one app, or one prepared archive. The entire bundle will be installed together.', 'Выбранные файлы': 'Selected files', 'Файлы ещё не выбраны': 'No files selected yet', 'Перетащите приложение в область выше или нажмите «Выбрать файлы».': 'Drop an app in the area above or click “Choose files”.', 'Очистить список': 'Clear list', 'Уберёт выбранные файлы из списка. Файлы на компьютере останутся.': 'Removes selected files from this list. Files on your computer will remain.', 'Параметры установки': 'Installation options', 'Обычные параметры уже выбраны. Меняйте их только при необходимости.': 'The usual options are already selected. Change them only when needed.', 'Сохранить данные при переустановке': 'Keep app data when reinstalling', 'Разрешить старую версию': 'Allow an older version', 'Выдать разрешения приложению': 'Grant app permissions', 'Заменит приложение новой версией, сохранив его настройки и личные данные.': 'Replaces the app with a new version while keeping its settings and personal data.', 'Разрешит установить более старую версию. Некоторые приложения это не поддерживают.': 'Allows installing an older version. Some apps do not support this.', 'Сразу разрешит приложению использовать запрошенные возможности, например микрофон и память.': 'Immediately grants requested access, such as microphone and storage permissions.', 'Флаги установки: сохранение данных — -r, старая версия — -d, разрешения — -g. Части одного приложения устанавливаются вместе.': 'Installation flags: keep data — -r, older version — -d, permissions — -g. Parts of one app are installed together.', 'Технические подробности': 'Technical details', 'Установить в автомобиль': 'Install in car', 'Проверит выбранные файлы и установит их на подключённое устройство. Результат появится напротив каждого файла.': 'Checks the selected files and installs them on the connected device. Each file will show its result.', 'Файлов в списке: {count}': 'Files in list: {count}', 'Память автомобиля': 'Car storage', 'Открывайте папки, передавайте файлы в автомобиль и сохраняйте их на компьютер.': 'Browse folders, send files to your car, and save them on your computer.', 'Путь к открытой папке в памяти автомобиля. Можно вставить другой путь и нажать Enter.': 'Path to the open folder in your car. Paste another path and press Enter to open it.', 'Откроет папку на один уровень выше.': 'Opens the parent folder.', 'Заново прочитает содержимое открытой папки.': 'Reads the current folder again.', 'Общая память': 'Shared storage', 'Загрузки': 'Downloads', 'Все накопители': 'All storage', 'Системные приложения': 'System apps', 'Временные файлы': 'Temporary files', 'Быстро откроет эту папку в памяти автомобиля.': 'Quickly opens this folder in your car storage.', 'Передать в автомобиль': 'Send to car', 'Выберите файлы на компьютере. Они будут скопированы в открытую папку автомобиля.': 'Choose files on your computer. They will be copied to the currently open car folder.', 'Скачать на компьютер': 'Save to computer', 'Сохранит выбранные файлы и папки на компьютер. Исходные файлы в автомобиле останутся.': 'Saves selected files and folders on your computer. The originals remain in your car.', 'Ещё': 'More', 'Создание папки, переименование, удаление и установка выбранного APK.': 'Create a folder, rename or delete items, or install a selected APK.', 'Содержимое папки': 'Folder contents', 'Откройте память автомобиля': 'Open car storage', 'Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.': 'Connect your car and click “Refresh”. Its files will appear here.', 'Папка пуста': 'This folder is empty', 'В этой папке пока нет файлов. Можно передать их с компьютера.': 'This folder has no files yet. You can send some from your computer.', 'Объектов: {count} · Выбрано: {selected}': 'Items: {count} · Selected: {selected}', 'Приложения в автомобиле': 'Apps in your car', 'Выберите приложение, чтобы открыть его на нужном экране или изменить его состояние.': 'Select an app to open it on the screen you want or change its state.', 'Покажет все приложения или только выбранную группу.': 'Shows all apps or just the selected group.', 'Найти приложение': 'Find an app', 'Получит свежий список приложений из автомобиля.': 'Gets a fresh list of apps from your car.', 'Выберите приложение из списка': 'Select an app from the list', 'Системные приложения могут отвечать за функции автомобиля. Если назначение неизвестно, оставьте их включёнными.': 'System apps may control car features. Leave them enabled if you do not know what they do.', 'Выберите экран, на котором откроется приложение.': 'Choose the screen on which the app will open.', 'Открыть приложение': 'Open app', 'Откроет выбранное приложение на центральном или пассажирском экране.': 'Opens the selected app on the centre or passenger screen.', 'Закроет выбранное приложение. Его настройки и файлы останутся.': 'Closes the selected app. Its settings and files will remain.', 'Сохранить APK': 'Save APK', 'Скачает установочные файлы выбранного приложения на компьютер. Само приложение останется в автомобиле.': 'Saves the selected app’s installation files on your computer. The app remains in your car.', 'Включение, отключение, очистка данных и удаление выбранного приложения.': 'Enable, disable, clear data, or uninstall the selected app.', 'Отключить приложение': 'Disable app', 'Включить приложение': 'Enable app', 'Список приложений': 'App list', 'Приложение': 'App', 'Получите список приложений': 'Load the app list', 'Подключите автомобиль и нажмите «Обновить». Затем выберите нужное приложение.': 'Connect your car and click “Refresh”. Then select an app.', 'Приложения не найдены': 'No apps found', 'Попробуйте другое название или измените фильтр.': 'Try another name or change the filter.', 'Найдено: {count}': 'Found: {count}', 'Отправляйте свои команды и читайте ответы автомобиля. Используйте этот раздел, если понимаете, что делает команда.': 'Send your own commands and read the car’s responses. Use this section when you understand what a command does.', 'Готов к команде': 'Ready for a command', 'Интерактивное подключение': 'Interactive connection', 'Откроет постоянное подключение для команд. Следующие строки отправляются прямо в автомобиль.': 'Opens a persistent connection for commands. Subsequent lines are sent directly to your car.', 'Прервёт выполняющуюся команду или закроет интерактивное подключение.': 'Stops the running command or closes the interactive connection.', 'Сохранение вывода и очистка окна терминала.': 'Save the output or clear the terminal window.', 'Очистить вывод': 'Clear output', 'Сохранить вывод': 'Save output', 'Ответы устройства': 'Device responses', 'Здесь появятся команда и её результат. История команд доступна стрелками вверх и вниз.': 'Commands and their results appear here. Use the up and down arrow keys for command history.', 'Введите adb … или adb shell …': 'Enter adb … or adb shell …', 'Введите команду и нажмите Enter. Стрелки вверх и вниз выбирают предыдущие команды.': 'Enter a command and press Enter. The up and down arrow keys select previous commands.', 'Отправит введённую команду. Ответ появится в окне выше.': 'Sends the command you entered. Its response appears above.', 'Для команды, обращающейся к автомобилю, сначала выберите подключённое устройство. Команды вроде adb devices работают и без него.': 'Select a connected device before sending a command to your car. Commands such as adb devices also work without one.', 'Закрыть подключение': 'Close connection', 'Постоянное подключение открыто': 'Persistent connection is open', 'Команда выполняется…': 'Command is running…', 'Выберите готовое приложение. Программа скачает его и установит в машину.': 'Choose an app. We will download it and install it in your car.', 'Загрузить свежий список приложений. Уже скачанные файлы останутся на компьютере.': 'Get the latest app list. Downloaded files will remain on your computer.', 'Каталог пока пуст': 'The catalog is empty', 'Администратор ещё не добавил приложения. Когда они появятся, вы сможете выбрать и установить нужное.': 'The administrator has not added any apps yet. When they appear, you can choose and install them.', 'Выбранное приложение': 'Selected app', 'Скачает выбранное приложение, проверит его и установит в подключённую машину. Дождитесь сообщения о завершении.': 'Downloads and checks the selected app, then installs it in the connected car. Wait for the completion message.', 'Версия будет проверена перед загрузкой': 'Version will be checked before downloading', 'Готовое приложение для вашей машины.': 'A ready-to-install app for your car.', 'Выбрать приложение': 'Select app', 'Ничего не найдено': 'Nothing found', 'Попробуйте другое название или очистите строку поиска.': 'Try another name or clear the search field.', 'Администратору нужно указать адрес каталога. Пока можно устанавливать APK с компьютера.': 'The administrator needs to set up a catalog address. You can still install APKs from your computer.', 'Нажмите «Выбрать приложение» на карточке выше.': 'Click “Select app” on a card above.', 'Нужна более новая версия Android': 'Requires a newer Android version', 'Не подходит подключённой машине': 'Does not match the connected car', 'Совместимость проверим после подключения': 'Compatibility will be checked after connection', 'Первичная проверка пройдена; APK проверим перед установкой': 'Initial checks passed; the APK will be checked before installation', 'Один комплект обновляет клавиатуры центрального и пассажирского экранов.': 'One set updates the keyboards on the center and passenger displays.', 'Выберите комплект из списка. До установки программа проверит оба файла и сохранит штатные клавиатуры.': 'Choose a set. Both files will be checked and the original keyboards backed up before installation.', 'Получить актуальный список клавиатур, который опубликовал администратор.': 'Get the latest keyboard list published by the administrator.', 'Комплектов пока нет': 'No keyboard sets yet', 'Администратор ещё не добавил ссылки на клавиатуры. Штатные клавиатуры можно восстановить отдельно.': 'The administrator has not added keyboard links yet. You can restore the original keyboards separately.', 'Клавиатура для ввода на основном экране автомобиля.': 'Keyboard for typing on the car’s main display.', 'Клавиатура для ввода на экране переднего пассажира.': 'Keyboard for typing on the front passenger’s display.', 'Оба файла будут проверены перед установкой': 'Both files will be checked before installation', 'Скачает две клавиатуры, сохранит текущие файлы и заменит их. Машина перезагрузит мультимедийную систему. Перед началом вы увидите подтверждение.': 'Downloads both keyboards, backs up the current files and replaces them. The multimedia system will reboot. You will see a confirmation before starting.', 'Штатные клавиатуры и резервные копии': 'Original keyboards and backups', 'Старые файлы сохраняются в машине и дополнительно на компьютере. Уже существующие штатные копии не перезаписываются.': 'Original files are backed up in the car and on your computer. Existing original backups will not be overwritten.', 'Вернёт сохранённые штатные клавиатуры для обоих экранов. Текущие файлы тоже будут сохранены на компьютере перед заменой.': 'Restores the backed-up original keyboards for both displays. Current files will also be backed up on your computer before replacement.', 'Установка и восстановление требуют расширенного доступа. Программа спросит подтверждение и покажет все этапы в журнале.': 'Installation and restoration require advanced access. You will be asked to confirm, and each step will appear in the activity log.', 'Подключите машину, чтобы проверить совместимость': 'Connect the car to check compatibility', 'Этот комплект не подходит подключённой машине': 'This set does not match the connected car', 'Модель поддерживается. Оба файла проверим перед заменой.': 'This model is supported. Both files will be checked before replacement.', 'Подберите удобный размер текста и элементов на выбранных экранах.': 'Choose a comfortable size for text and controls on the selected displays.', 'Параметры экранов ещё не проверены': 'Display settings have not been checked yet', 'Экран': 'Display', 'Масштаб интерфейса': 'Interface scale', 'Применить масштаб': 'Apply scale', 'Изменит размер текста и кнопок на выбранном экране. Большее число делает элементы крупнее. Приборная панель требует отдельного подтверждения.': 'Changes text and button sizes on the selected display. A larger number makes items bigger. The instrument display requires a separate confirmation.', 'Вернуть заводской масштаб': 'Restore factory scale', 'Уберёт пользовательский масштаб и вернёт заводской размер элементов на выбранных экранах.': 'Removes your custom scale and restores the factory size on the selected displays.', 'Проверить экраны': 'Check displays', 'Прочитает текущие размеры и масштаб экранов. Ничего не меняет.': 'Reads the current display sizes and scale without changing anything.', 'Поможет указать, какой экран является центральным, пассажирским и приборным, если прошивка использует другой порядок.': 'Choose which display is the center, passenger or instrument display if your firmware uses a different order.', 'Выберите приложение и настройте, к каким возможностям автомобиля у него есть доступ.': 'Choose an app and control which car features it can access.', 'Введите адрес приложения, например ru.vk.store': 'Enter an app address, for example ru.vk.store', 'Музыка без пауз': 'Uninterrupted music', 'Не давайте выбранному приложению прерывать музыку.': 'Prevent the selected app from interrupting music.', 'Вернёт выбранному приложению возможность приостанавливать музыку, когда это нужно.': 'Allows the selected app to pause music again when needed.', 'Доступ к микрофону': 'Microphone access', 'Разрешите выбранному приложению записывать голос.': 'Allow the selected app to record your voice.', 'Разрешить микрофон': 'Allow microphone', 'Поверх других окон': 'Over other windows', 'Разрешите небольшие окна приложения поверх экрана.': 'Allow the app to show small windows over the screen.', 'Разрешить поверх окон': 'Allow over other windows', 'Скрытые настройки': 'Hidden settings', 'Дайте настройщикам и переназначателям кнопок расширенный доступ.': 'Give settings and button-mapping apps additional access.', 'Дать доступ к настройкам': 'Allow settings access', 'Работа в фоне': 'Background activity', 'Помогите приложению работать при экономии энергии.': 'Help the app keep working when energy saving is active.', 'Не ограничивать в фоне': 'Allow background activity', 'Режим экономии энергии': 'Energy-saving mode', 'Управляйте общими ограничениями работы приложений в фоне.': 'Manage overall limits on background app activity.', 'Отключить экономию': 'Disable energy saving', 'Снимет общие ограничения фоновой работы приложений. Это может увеличить расход энергии.': 'Removes overall background activity limits. This may increase energy use.', 'Вернуть экономию': 'Restore energy saving', 'Снова разрешит системе ограничивать приложения в фоне для экономии энергии.': 'Allows the system to limit background apps again to save energy.', 'Полезные настройки интернета и внешнего вида. Для возврата сохранены прежние значения.': 'Useful internet and display settings. Previous values are saved when you make a change.', 'Фильтр рекламы': 'Ad filtering', 'Использует AdGuard для фильтрации сетевых адресов. Доступность зависит от сети.': 'Uses AdGuard to filter network addresses. Availability depends on your network.', 'Включить фильтр': 'Enable filtering', 'Выключить фильтр': 'Disable filtering', 'Значок Wi-Fi без интернета': 'Wi-Fi without internet icon', 'Можно убрать предупреждение, если сеть машины работает без доступа в интернет.': 'Hide the warning if the car’s network works without internet access.', 'Убрать предупреждение': 'Hide warning', 'Вернуть проверку': 'Restore checks', 'Больше места на экране': 'More screen space', 'Скрывает верхнюю панель системы, чтобы приложение занимало больше места.': 'Hides the system’s top bar to give the app more space.', 'Скрыть верхнюю панель': 'Hide top bar', 'Вернуть верхнюю панель': 'Restore top bar', 'Вернёт обычное поведение этой функции.': 'Restores the usual behavior of this feature.', 'Восстановить прежнее значение': 'Restore previous value', 'Вернёт значение, которое было в машине до первого изменения через эту программу.': 'Restores the value the car had before this app first changed it.', 'Результат проверяется после изменения': 'The result is checked after each change', 'Открыть настройки Android': 'Open Android settings', 'Откроет обычные настройки Android на экране машины. Доступные пункты зависят от прошивки.': 'Opens regular Android settings on the car’s display. Available options depend on the firmware.', 'Эти действия меняют системные файлы и перезагружают мультимедийную систему. Перед запуском вы увидите точное описание.': 'These actions change system files and reboot the multimedia system. You will see a detailed description before starting.', 'Пересоздаёт базу настроек автомобиля. Сначала сохраняет резервную копию на компьютере; личные настройки могут сброситься.': 'Recreates the car’s settings database after backing it up on your computer. Personal preferences may be reset.', 'Сохранит настройки автомобиля на компьютере и пересоздаст их в машине. Личные настройки могут сброситься. Перед началом программа спросит подтверждение.': 'Backs up vehicle settings on your computer and recreates them in the car. Personal preferences may be reset. You will be asked to confirm before starting.', 'Отключает проверку системного раздела по процедуре установщика. Требуется расширенный доступ и перезагрузка.': 'Disables system-partition checks using the installer’s procedure. Requires advanced access and a reboot.', 'Отключит проверку системных файлов по процедуре из отчёта и перезагрузит мультимедийную систему. Это не возвращает заводскую защиту.': 'Disables system-file checks using the report’s procedure and reboots the multimedia system. This does not restore factory protection.', 'Откроет сведения о выполненной или прерванной операции и сохранённых резервных копиях.': 'Opens information about completed or interrupted recovery and saved backups.', 'Попытается вернуть систему в рабочее состояние после прерванного восстановления. Используется только для машины, указанной в журнале.': 'Attempts to restart the system after interrupted recovery. Only works with the car recorded in the recovery log.', 'Доступные экраны': 'Available displays', 'Управляйте доступными функциями, приложениями и клавиатурами. Введите секретный код, чтобы продолжить.': 'Manage available features, apps and keyboards. Enter the secret code to continue.', 'Секретный код': 'Secret code', 'Приложение каталога': 'Catalog app', 'Комплект клавиатур': 'Keyboard set', 'Пользователи увидят название и описание. Ссылки нужны программе для скачивания файлов.': 'Users will see the name and description. The app uses the links to download files.', 'Короткое постоянное имя записи. Не меняйте его после публикации, чтобы программа узнавала приложение.': 'A short permanent record name. Keep it unchanged after publication so the app can identify the entry.', 'Название, которое пользователь увидит в каталоге.': 'The name users will see in the catalog.', 'Коротко расскажите, для чего нужно приложение или комплект.': 'Briefly describe what the app or keyboard set is for.', 'Вставьте ссылку на GitHub, страницу выпуска или файл для скачивания.': 'Paste a GitHub link, release page or downloadable file link.', 'Необязательно: точное имя нужного файла, если в выпуске их несколько.': 'Optional: the exact file name if the release contains several files.', 'Необязательно: внутренний адрес приложения для дополнительной проверки скачанного файла.': 'Optional: the app’s internal address for an additional downloaded-file check.', 'Ссылка на клавиатуру основного экрана автомобиля.': 'Link to the keyboard for the car’s main display.', 'Ссылка на клавиатуру экрана переднего пассажира.': 'Link to the keyboard for the front passenger’s display.', 'Выключенная запись останется в каталоге, но установить её будет нельзя.': 'A disabled entry stays in the catalog but cannot be installed.', 'Минимальное поколение Android, которое поддерживает файл. Программа проверит это перед установкой.': 'The minimum Android generation supported by this file. It will be checked before installation.', 'Минимальный Android (API)': 'Minimum Android (API)', 'Разрешить приложению устанавливать другие приложения': 'Allow this app to install other apps', 'Нужно магазинам приложений. Выдаёт дополнительное разрешение после успешной установки.': 'Needed by app stores. Grants an additional permission after successful installation.', 'Поддерживаемые модели': 'Supported models', 'Управление приложением': 'App management', 'Разделы приложения': 'App sections', 'Установка и файлы': 'Installation and files', 'Приложения и твики': 'Apps and tweaks', 'Системные действия': 'System actions', 'Выбор и скачивание приложений из общего каталога.': 'Choose and download apps from the shared catalog.', 'Установка файлов, которые пользователь выбрал на компьютере.': 'Install files the user selected on their computer.', 'Выбор комплектов для двух экранов и восстановление штатных клавиатур.': 'Choose sets for both displays and restore original keyboards.', 'Просмотр того, что открыто на экранах, и поиск событий кнопок.': 'View what is open on each display and find button events.', 'Просмотр памяти автомобиля и копирование файлов.': 'Browse the car’s storage and copy files.', 'Просмотр установленных приложений и управление ими.': 'View and manage installed apps.', 'Настройки экрана, звука, сети и восстановление.': 'Display, sound and network settings, plus recovery.', 'Позволяет опытному пользователю вводить произвольные команды.': 'Allows an experienced user to enter custom commands.', 'Разрешает все способы установки приложений, включая каталог и файлы на компьютере.': 'Allows all app installation methods, including the catalog and local files.', 'Разрешает загрузку, удаление, создание папок и переименование файлов в машине.': 'Allows uploading, deleting, creating folders and renaming files in the car.', 'Разрешает замену двух системных клавиатур из каталога.': 'Allows replacing both system keyboards from the catalog.', 'Разрешает возврат сохранённых штатных клавиатур.': 'Allows restoring backed-up original keyboards.', 'Разрешает временно отключать приложения и включать их обратно.': 'Allows temporarily disabling apps and enabling them again.', 'Разрешает удалять данные и настройки выбранного приложения.': 'Allows deleting the selected app’s data and preferences.', 'Разрешает удалять приложения из машины.': 'Allows uninstalling apps from the car.', 'Разрешает менять размер текста и элементов экрана.': 'Allows changing the size of text and screen controls.', 'Разрешает менять доступ к микрофону, звуку и фоновой работе.': 'Allows changing access to the microphone, sound and background activity.', 'Разрешает настройки сети и верхней панели экрана.': 'Allows network and top-bar settings.', 'Разрешает пользователю самостоятельно включать расширенный системный доступ.': 'Allows the user to enable advanced system access themselves.', 'Разрешает перезагрузку и системные сценарии с перезагрузкой.': 'Allows rebooting and system procedures that require a reboot.', 'Разрешает пересоздание настроек автомобиля с предварительной копией.': 'Allows recreating vehicle settings after making a backup.', 'Разрешает отключить проверку системного раздела по процедуре установщика.': 'Allows disabling system-partition checks using the installer’s procedure.', 'Соберите список приложений для пользователей.': 'Build the app list for your users.', 'Каждая запись содержит две ссылки: для центрального и пассажирского экранов.': 'Each entry contains two links, for the center and passenger displays.', 'Общий каталог на GitHub': 'Shared catalog on GitHub', 'Пользователям не нужен пароль для чтения каталога. Для публикации нужен ваш токен с доступом к этому репозиторию.': 'Users do not need a password to read the catalog. Publishing requires your token with access to this repository.', 'Секрет для публикации. Хранится только на этом компьютере и не попадёт в каталог или сборку.': 'A publishing secret. Stored only on this computer and never included in the catalog or executable.', 'Публикация изменений': 'Publish changes', 'Сначала получите актуальный каталог, затем опубликуйте черновик. Если каталог изменил другой администратор, программа сохранит ваш черновик и сообщит о конфликте.': 'Load the current catalog, then publish your draft. If another administrator changed it, your draft will be kept and a conflict reported.', 'Выберите запись для изменения или добавьте новую.': 'Select an entry to edit or add a new one.', 'Экраны': 'Displays', 'Кнопки руля': 'Steering wheel', 'Наблюдение': 'Live view', 'Сведения о приложении': 'App details', 'Открытие приложений': 'Apps opened', 'Нажатия и голос': 'Buttons and voice', 'Фоновые действия': 'Background actions', 'Вся запись': 'Full recording', 'Экраны приложения': 'App screens', 'Получаемые события': 'Received events', 'Полные сведения': 'Full details', 'Выберите, что хотите узнать: открытые экраны, действие кнопки или работу приложения.': "Choose what to inspect: open screens, a button action, or an app's activity.", 'Копировать эту запись': 'Copy this value', 'Скопировано': 'Copied', 'Что сейчас открыто?': 'What is open right now?', 'Узнайте, какое приложение сейчас видно на каждом экране автомобиля.': "See which app is currently visible on each of the car's displays.", 'Обновить экраны': 'Refresh displays', 'Показывает приложения, которые сейчас открыты на экранах автомобиля.': "Shows the apps currently open on the car's displays.", 'Приборная панель': 'Instrument cluster', 'Центральный экран': 'Centre display', 'Экран пассажира': 'Passenger display', 'Пока нет данных': 'No information yet', 'Подключите автомобиль и нажмите «Обновить экраны».': 'Connect the car and select Refresh displays.', 'Адрес приложения в системе. Его можно скопировать для настройки или диагностики.': "The app's address in the system. You can copy it for setup or inspection.", 'Открытый экран приложения': 'Open app screen', 'Название той части приложения, которая сейчас видна.': 'The name of the part of the app currently on screen.', 'Полная запись': 'Full address', 'Приложение и экран': 'App and screen', 'Полная запись приложения и открытого экрана.': 'The full address of the app and its open screen.', 'Что делает кнопка руля?': 'What does this steering wheel button do?', 'Начните запись, нажмите нужную кнопку в автомобиле и дождитесь результата.': 'Start a recording, press the button in the car, and wait for the result.', '1 · Начните запись': '1 · Start recording', '2 · Нажмите кнопку на руле': '2 · Press the steering wheel button', '3 · Посмотрите результат': '3 · View the result', 'Начать запись на 6 секунд': 'Record for 6 seconds', 'Записывает события в течение шести секунд. Сразу после начала нажмите нужную кнопку на руле.': 'Records events for six seconds. Press the steering wheel button as soon as recording begins.', 'Отменить': 'Cancel', 'Останавливает текущую запись. Можно сразу начать новую.': 'Stops the current recording. You can start a new one straight away.', 'Сохранить запись': 'Save recording', 'Сохраняет все полученные сообщения, включая скрытые в других группах.': 'Saves all received messages, including those outside the other groups.', 'Открыть в Блокноте': 'Open in Notepad', 'Сохраняет запись на компьютер и открывает её в Блокноте.': 'Saves the recording to your computer and opens it in Notepad.', 'Какие приложения и экраны открылись во время записи.': 'Apps and screens that opened during the recording.', 'Сообщения о кнопках руля и голосовых командах.': 'Messages about steering wheel buttons and voice commands.', 'Действия, которые автомобиль выполняет без открытия нового окна.': 'Actions the car performs without opening a new window.', 'Все сообщения, полученные во время записи.': 'Every message received during the recording.', 'Здесь появится результат': 'Results will appear here', 'Нажмите «Начать запись» и затем нужную кнопку на руле.': 'Select Record for 6 seconds, then press the steering wheel button.', 'Наблюдение в реальном времени': 'Watch events live', 'Запустите нужный вид наблюдения и выполните действие в автомобиле.': 'Start the view you need, then perform an action in the car.', 'Показать сообщения с этими словами, например: музыка, голос': 'Show messages with these words, for example: music, voice', 'Введите одно или несколько слов через запятую. Остальные сообщения будут скрыты, но сохранятся в записи.': 'Enter one or more words separated by commas. Other messages are hidden but remain in the recording.', 'Сохранить наблюдение': 'Save live recording', 'Сохраняет сообщения из обоих видов наблюдения, включая скрытые фильтром.': 'Saves messages from both views, including those hidden by the filter.', 'События приложений': 'App activity', 'Показывает, что делают приложения во время вашей работы с экраном.': 'Shows what apps do while you use the display.', 'Нажатия кнопок': 'Button presses', 'Здесь видны только те нажатия, которые автомобиль передаёт системе.': 'Only button presses reported to the system by the car appear here.', 'Начать': 'Start', 'Начинает получать новые сообщения. Второй вид наблюдения работает независимо.': 'Starts receiving new messages. The other view runs independently.', 'Пауза прокрутки': 'Pause scrolling', 'Оставляет нужные строки на экране. Запись продолжает работать.': 'Keeps the current lines on screen. Recording continues.', 'Наблюдение ещё не началось': 'Not running yet', 'Нажмите «Начать», затем выполните нужное действие в автомобиле.': 'Select Start, then perform the action in the car.', 'Какие действия доступны приложению?': 'What can this app do?', 'Найдите установленное приложение или укажите его адрес, затем получите сведения.': 'Find an installed app or enter its address, then request its details.', 'Найти приложение по части адреса': 'Find an app by part of its address', 'Введите часть адреса приложения. Программа найдёт совпадения среди установленных приложений.': "Enter part of an app's address to search among installed apps.", 'Найти': 'Find', 'Выберите приложение или укажите его адрес': 'Select an app or enter its address', 'Например: com.voyah.music': 'For example: com.voyah.music', 'Получить сведения': 'Get details', 'Показывает доступные экраны приложения и действия, на которые оно реагирует.': "Shows the app's available screens and the actions it responds to.", 'Сохранить': 'Save', 'Сохраняет все сведения о выбранном приложении на компьютер.': 'Saves all details about the selected app to your computer.', 'Экраны, которые могут открываться внутри приложения.': 'Screens that can open within this app.', 'События, после которых приложение может выполнять действия.': 'Events that can trigger actions in this app.', 'Действия приложения, которые выполняются без открытия окна.': 'App actions that run without opening a window.', 'Все сведения, полученные от автомобиля. Их можно сохранить для подробного разбора.': 'All details received from the car. You can save them for closer inspection.', 'Выберите приложение': 'Select an app', 'Найдите приложение выше и нажмите «Получить сведения».': 'Find an app above and select Get details.', 'Экран {number}': 'Display {number}', 'Приложение найдено': 'App found', 'Ожидает обновления': 'Waiting for refresh', 'Автомобиль не сообщил, что открыто на этом экране.': 'The car did not report what is open on this display.', 'Обновлено в {time}': 'Updated at {time}', 'Ещё не обновлялось': 'Not refreshed yet', 'Готово к записи': 'Ready to record', 'Подготавливаем запись…': 'Preparing recording…', 'Нажмите кнопку на руле · осталось {seconds} с': 'Press the steering wheel button · {seconds} s remaining', 'Получаем записанные сообщения…': 'Reading recorded messages…', 'Группируем найденные сообщения…': 'Grouping recorded messages…', 'Запись завершена': 'Recording complete', 'Запись отменена': 'Recording cancelled', 'Не удалось завершить запись': 'Recording could not be completed', 'Записать ещё раз': 'Record again', 'Обработано сообщений: {count}. Одно нажатие может создавать несколько сообщений.': 'Messages processed: {count}. A single button press can produce several messages.', 'Остановить': 'Stop', 'Продолжить прокрутку': 'Resume scrolling', 'Запись идёт · просмотр на паузе': 'Recording · scrolling paused', 'Наблюдение идёт': 'Running', 'Нет доступа': 'Access unavailable', 'Наблюдение прервано': 'Interrupted', 'Остановлено': 'Stopped', 'Найдено приложений: {count}': 'Apps found: {count}', 'Можно искать приложение или сразу указать его адрес.': 'Search for an app or enter its address directly.', 'Сведения ещё не запрошены': 'No details requested yet', 'Получаем сведения о приложении…': 'Reading app details…', 'Сведения получены': 'Details received', 'Не удалось получить сведения': 'Could not read details', 'Обновляем экраны…': 'Refreshing displays…', 'Нет открытого приложения': 'No app reported', 'Автомобиль не сообщил, что открыто на этом экране. Можно обновить данные ещё раз.': 'The car did not report what is open on this display. You can try refreshing again.', 'Перехват кнопки руля': 'Steering wheel capture', 'Запись начинается': 'Recording is starting', 'Дождитесь начала отсчёта и нажмите нужную кнопку на руле.': 'Wait for the countdown to start, then press the steering wheel button.', 'Нажмите кнопку на руле сейчас…': 'Press the steering wheel button now…', 'Не удалось обработать запись.': 'Could not process the recording.', 'Подходящих сообщений не найдено': 'No matching messages', 'Попробуйте ещё раз и нажмите кнопку после начала отсчёта. Некоторые кнопки автомобиля не показывают свои действия в доступном журнале.': 'Try again and press the button after the countdown starts. Some car buttons do not report their actions in the available log.', 'Запись пуста': 'The recording is empty', 'Автомобиль не передал сообщений во время записи. Можно попробовать ещё раз.': 'The car sent no messages during the recording. You can try again.', 'Сначала подключите устройство.': 'Connect a device first.', 'Дождитесь завершения или отмените текущее задание.': 'Wait for the current task to finish, or cancel it.', 'Автомобиль не разрешает читать нажатия кнопок.': 'The car does not allow access to button presses.', 'Ожидаем сообщения': 'Waiting for messages', 'Выполните нужное действие в автомобиле. Новые сообщения появятся здесь.': 'Perform the action in the car. New messages will appear here.', 'Совпадений не найдено': 'No matches found', 'Попробуйте изменить слова в фильтре. Полная запись остаётся доступна для сохранения.': 'Try changing the filter words. The full recording can still be saved.', 'Ищем приложения…': 'Searching apps…', 'Приложения не найдены. Попробуйте другую часть адреса.': 'No apps found. Try another part of the address.', 'Выберите пакет.': 'Select an app.', 'Не удалось обработать сведения.': 'Could not process the details.', 'Этот раздел отсутствует': 'This section is unavailable', 'В доступных сведениях приложение не сообщило об этих действиях. Полные сведения доступны в соседнем разделе.': 'The app did not report these actions in the available details. You can still view the full details in the next section.'})
+
+EN.update({'Сначала выберите подходящий объект или заполните необходимые поля.': 'First choose a suitable item or fill in the required fields.', 'Проверяем параметры машины…': 'Checking vehicle compatibility…'})
+
+EN.update({'Экраны': 'Displays', 'Кнопки руля': 'Steering wheel', 'Наблюдение': 'Live view', 'Сведения о приложении': 'App details', 'Открытие приложений': 'Apps opened', 'Нажатия и голос': 'Buttons and voice', 'Фоновые действия': 'Background actions', 'Вся запись': 'Full recording', 'Экраны приложения': 'App screens', 'Получаемые события': 'Received events', 'Полные сведения': 'Full details', 'Выберите, что хотите узнать: открытые экраны, действие кнопки или работу приложения.': "Choose what to inspect: open screens, a button action, or an app's activity.", 'Копировать эту запись': 'Copy this value', 'Скопировано': 'Copied', 'Что сейчас открыто?': 'What is open right now?', 'Узнайте, какое приложение сейчас видно на каждом экране автомобиля.': "See which app is currently visible on each of the car's displays.", 'Обновить экраны': 'Refresh displays', 'Показывает приложения, которые сейчас открыты на экранах автомобиля.': "Shows the apps currently open on the car's displays.", 'Приборная панель': 'Instrument cluster', 'Центральный экран': 'Centre display', 'Экран пассажира': 'Passenger display', 'Пока нет данных': 'No information yet', 'Подключите автомобиль и нажмите «Обновить экраны».': 'Connect the car and select Refresh displays.', 'Приложение': 'App', 'Адрес приложения в системе. Его можно скопировать для настройки или диагностики.': "The app's address in the system. You can copy it for setup or inspection.", 'Открытый экран приложения': 'Open app screen', 'Название той части приложения, которая сейчас видна.': 'The name of the part of the app currently on screen.', 'Полная запись': 'Full address', 'Подробности': 'Details', 'На экране открыто приложение': 'An app is open on this display', 'Приложение и экран': 'App and screen', 'Полная запись приложения и открытого экрана.': 'The full address of the app and its open screen.', 'Что делает кнопка руля?': 'What does this steering wheel button do?', 'Начните запись, нажмите нужную кнопку в автомобиле и дождитесь результата.': 'Start a recording, press the button in the car, and wait for the result.', '1 · Начните запись': '1 · Start recording', '2 · Нажмите кнопку на руле': '2 · Press the steering wheel button', '3 · Посмотрите результат': '3 · View the result', 'Начать запись на 6 секунд': 'Record for 6 seconds', 'Записывает события в течение шести секунд. Сразу после начала нажмите нужную кнопку на руле.': 'Records events for six seconds. Press the steering wheel button as soon as recording begins.', 'Отменить': 'Cancel', 'Останавливает текущую запись. Можно сразу начать новую.': 'Stops the current recording. You can start a new one straight away.', 'Сохранить запись': 'Save recording', 'Сохраняет все полученные сообщения, включая скрытые в других группах.': 'Saves all received messages, including those outside the other groups.', 'Открыть в Блокноте': 'Open in Notepad', 'Сохраняет запись на компьютер и открывает её в Блокноте.': 'Saves the recording to your computer and opens it in Notepad.', 'Какие приложения и экраны открылись во время записи.': 'Apps and screens that opened during the recording.', 'Сообщения о кнопках руля и голосовых командах.': 'Messages about steering wheel buttons and voice commands.', 'Действия, которые автомобиль выполняет без открытия нового окна.': 'Actions the car performs without opening a new window.', 'Все сообщения, полученные во время записи.': 'Every message received during the recording.', 'Здесь появится результат': 'Results will appear here', 'Нажмите «Начать запись» и затем нужную кнопку на руле.': 'Select Record for 6 seconds, then press the steering wheel button.', 'Наблюдение в реальном времени': 'Watch events live', 'Запустите нужный вид наблюдения и выполните действие в автомобиле.': 'Start the view you need, then perform an action in the car.', 'Показать сообщения с этими словами, например: музыка, голос': 'Show messages with these words, for example: music, voice', 'Введите одно или несколько слов через запятую. Остальные сообщения будут скрыты, но сохранятся в записи.': 'Enter one or more words separated by commas. Other messages are hidden but remain in the recording.', 'Сохранить наблюдение': 'Save live recording', 'Сохраняет сообщения из обоих видов наблюдения, включая скрытые фильтром.': 'Saves messages from both views, including those hidden by the filter.', 'События приложений': 'App activity', 'Показывает, что делают приложения во время вашей работы с экраном.': 'Shows what apps do while you use the display.', 'Нажатия кнопок': 'Button presses', 'Здесь видны только те нажатия, которые автомобиль передаёт системе.': 'Only button presses reported to the system by the car appear here.', 'Начать': 'Start', 'Начинает получать новые сообщения. Второй вид наблюдения работает независимо.': 'Starts receiving new messages. The other view runs independently.', 'Пауза прокрутки': 'Pause scrolling', 'Оставляет нужные строки на экране. Запись продолжает работать.': 'Keeps the current lines on screen. Recording continues.', 'Наблюдение ещё не началось': 'Not running yet', 'Нажмите «Начать», затем выполните нужное действие в автомобиле.': 'Select Start, then perform the action in the car.', 'Какие действия доступны приложению?': 'What can this app do?', 'Найдите установленное приложение или укажите его адрес, затем получите сведения.': 'Find an installed app or enter its address, then request its details.', 'Найти приложение по части адреса': 'Find an app by part of its address', 'Введите часть адреса приложения. Программа найдёт совпадения среди установленных приложений.': "Enter part of an app's address to search among installed apps.", 'Найти': 'Find', 'Выберите приложение или укажите его адрес': 'Select an app or enter its address', 'Например: com.voyah.music': 'For example: com.voyah.music', 'Получить сведения': 'Get details', 'Показывает доступные экраны приложения и действия, на которые оно реагирует.': "Shows the app's available screens and the actions it responds to.", 'Сохранить': 'Save', 'Сохраняет все сведения о выбранном приложении на компьютер.': 'Saves all details about the selected app to your computer.', 'Экраны, которые могут открываться внутри приложения.': 'Screens that can open within this app.', 'События, после которых приложение может выполнять действия.': 'Events that can trigger actions in this app.', 'Действия приложения, которые выполняются без открытия окна.': 'App actions that run without opening a window.', 'Все сведения, полученные от автомобиля. Их можно сохранить для подробного разбора.': 'All details received from the car. You can save them for closer inspection.', 'Выберите приложение': 'Select an app', 'Найдите приложение выше и нажмите «Получить сведения».': 'Find an app above and select Get details.', 'Экран {number}': 'Display {number}', 'Приложение найдено': 'App found', 'Ожидает обновления': 'Waiting for refresh', 'Автомобиль не сообщил, что открыто на этом экране.': 'The car did not report what is open on this display.', 'Обновлено в {time}': 'Updated at {time}', 'Ещё не обновлялось': 'Not refreshed yet', 'Готово к записи': 'Ready to record', 'Подготавливаем запись…': 'Preparing recording…', 'Нажмите кнопку на руле · осталось {seconds} с': 'Press the steering wheel button · {seconds} s remaining', 'Получаем записанные сообщения…': 'Reading recorded messages…', 'Группируем найденные сообщения…': 'Grouping recorded messages…', 'Запись завершена': 'Recording complete', 'Запись отменена': 'Recording cancelled', 'Не удалось завершить запись': 'Recording could not be completed', 'Записать ещё раз': 'Record again', 'Обработано сообщений: {count}. Одно нажатие может создавать несколько сообщений.': 'Messages processed: {count}. A single button press can produce several messages.', 'Остановить': 'Stop', 'Продолжить прокрутку': 'Resume scrolling', 'Запись идёт · просмотр на паузе': 'Recording · scrolling paused', 'Наблюдение идёт': 'Running', 'Нет доступа': 'Access unavailable', 'Наблюдение прервано': 'Interrupted', 'Остановлено': 'Stopped', 'Найдено приложений: {count}': 'Apps found: {count}', 'Можно искать приложение или сразу указать его адрес.': 'Search for an app or enter its address directly.', 'Сведения ещё не запрошены': 'No details requested yet', 'Получаем сведения о приложении…': 'Reading app details…', 'Сведения получены': 'Details received', 'Не удалось получить сведения': 'Could not read details', 'Обновляем экраны…': 'Refreshing displays…', 'Нет открытого приложения': 'No app reported', 'Автомобиль не сообщил, что открыто на этом экране. Можно обновить данные ещё раз.': 'The car did not report what is open on this display. You can try refreshing again.', 'Перехват кнопки руля': 'Steering wheel capture', 'Запись начинается': 'Recording is starting', 'Дождитесь начала отсчёта и нажмите нужную кнопку на руле.': 'Wait for the countdown to start, then press the steering wheel button.', 'Нажмите кнопку на руле сейчас…': 'Press the steering wheel button now…', 'Не удалось обработать запись.': 'Could not process the recording.', 'Подходящих сообщений не найдено': 'No matching messages', 'Попробуйте ещё раз и нажмите кнопку после начала отсчёта. Некоторые кнопки автомобиля не показывают свои действия в доступном журнале.': 'Try again and press the button after the countdown starts. Some car buttons do not report their actions in the available log.', 'Запись пуста': 'The recording is empty', 'Автомобиль не передал сообщений во время записи. Можно попробовать ещё раз.': 'The car sent no messages during the recording. You can try again.', 'Сначала подключите устройство.': 'Connect a device first.', 'Дождитесь завершения или отмените текущее задание.': 'Wait for the current task to finish, or cancel it.', 'Автомобиль не разрешает читать нажатия кнопок.': 'The car does not allow access to button presses.', 'Ожидаем сообщения': 'Waiting for messages', 'Выполните нужное действие в автомобиле. Новые сообщения появятся здесь.': 'Perform the action in the car. New messages will appear here.', 'Совпадений не найдено': 'No matches found', 'Попробуйте изменить слова в фильтре. Полная запись остаётся доступна для сохранения.': 'Try changing the filter words. The full recording can still be saved.', 'Ищем приложения…': 'Searching apps…', 'Приложения не найдены. Попробуйте другую часть адреса.': 'No apps found. Try another part of the address.', 'Выберите пакет.': 'Select an app.', 'Не удалось обработать сведения.': 'Could not process the details.', 'Этот раздел отсутствует': 'This section is unavailable', 'В доступных сведениях приложение не сообщило об этих действиях. Полные сведения доступны в соседнем разделе.': 'The app did not report these actions in the available details. You can still view the full details in the next section.'})
+
+EN.update({'1. Начните запись':'1. Start recording', '2. Нажмите кнопку руля':'2. Press the steering button', '3. Посмотрите результат':'3. Read the result', '6 секунд':'6 seconds', '{seconds} с':'{seconds} s', 'Время записи':'Recording time'})
+
+class UiTokens:
+    background = '#121417'
+    surface = '#1C1F26'
+    raised = '#232A34'
+    accent = '#00B4D8'
+    text = '#EDF2F7'
+    secondary = '#B3BECD'
+    radius = 12
+
+
 STYLE = """
-QWidget { background: #121417; color: #E5EBF2; font-family: 'Segoe UI'; font-size: 11pt; }
+QWidget { background: #121417; color: #EDF2F7; font-family: 'Segoe UI'; font-size: 11pt; }
 QMainWindow, QScrollArea, QScrollArea > QWidget > QWidget { background: #121417; }
-QFrame#card, QFrame#header { background: #1C1F26; border: 1px solid #2B303A; border-radius: 12px; }
-QFrame#card QLabel, QFrame#header QLabel { background: transparent; }
-QLabel#title { font-size: 22pt; font-weight: 700; letter-spacing: 1px; }
-QLabel#subtitle { color: #B1BED0; font-size: 10pt; }
-QLabel#section { font-size: 13pt; font-weight: 600; color: #F2F7FC; }
-QLabel#eyebrow { color: #00B4D8; font-size: 8pt; font-weight: 700; letter-spacing: 2px; }
-QPushButton { background: #262C36; border: 1px solid #343D4C; border-radius: 7px; padding: 7px 12px; min-height: 20px; }
-QPushButton:hover { background: #323C4A; border-color: #00B4D8; }
-QPushButton:pressed { background: #164754; }
-QPushButton:disabled { color: #626C7A; border-color: #282D36; background: #20252D; }
-QPushButton[accent='true'] { background: #00A2C2; color: #06151C; border-color: #00B4D8; font-weight: 700; }
-QPushButton[accent='true']:disabled { color: #8995A6; border-color: #343D4C; background: #252C35; }
-QPushButton[danger='true'] { color: #FFA4AA; border-color: #71414A; }
-QLineEdit, QComboBox, QSpinBox { background: #14191F; border: 1px solid #343D4C; border-radius: 6px; padding: 7px; selection-background-color: #006D85; }
+QFrame#card, QFrame#catalogCard, QFrame#header, QFrame#operationDock { background: #1C1F26; border: 1px solid #303846; border-radius: 12px; }
+QFrame#catalogCard[selected='true'] { border: 2px solid #00B4D8; background: #20323C; }
+QFrame#innerCard { background: #171D25; border: 1px solid #303846; border-radius: 12px; }
+QFrame#innerCard QLabel { background: transparent; }
+QLabel#muted, QLabel#fieldLabel { color: #B3BECD; background: transparent; }
+QLabel#statusChip { color: #A1EDFD; background: #203842; border-radius: 12px; padding: 4px 8px; }
+QToolButton { padding: 0; }
+QFrame#card QLabel, QFrame#catalogCard QLabel, QFrame#header QLabel, QFrame#operationDock QLabel, QFrame#sidebarPanel QLabel { background: transparent; }
+QWidget#disclosureContent, QFrame#disclosure { background: transparent; border: 0; }
+QFrame#sidebarPanel { background: #171B21; border: 1px solid #29313D; border-radius: 12px; }
+QLabel#title { font-size: 20pt; font-weight: 700; }
+QLabel#subtitle, QLabel#hint { color: #B3BECD; background: transparent; }
+QLabel#section { font-size: 14pt; font-weight: 600; background: transparent; }
+QLabel#eyebrow { color: #00B4D8; font-size: 9pt; font-weight: 600; background: transparent; }
+QLabel#countdown { font-size: 32pt; font-weight: 700; color: #00B4D8; background: transparent; }
+QLabel#badge { color: #A1EDFD; background: #203842; border-radius: 12px; padding: 6px 12px; }
+QPushButton, QToolButton { background: #28313D; border: 1px solid #3B4655; border-radius: 12px; padding: 8px 14px; min-height: 26px; }
+QPushButton:hover, QToolButton:hover { background: #344152; border-color: #00B4D8; }
+QPushButton:pressed, QToolButton:pressed { background: #164C5B; }
+QPushButton:disabled, QToolButton:disabled { color: #8491A3; background: #212730; border-color: #303846; }
+QPushButton[accent='true'] { background: #00B4D8; color: #071C24; font-weight: 600; }
+QPushButton[danger='true'], QToolButton[danger='true'] { color: #FFA4AA; border-color: #80515C; }
+QLineEdit, QComboBox, QSpinBox { background: #151A21; border: 1px solid #3B4655; border-radius: 12px; padding: 8px 12px; min-height: 26px; selection-background-color: #126078; }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: #00B4D8; }
-QComboBox QAbstractItemView { background: #20262F; selection-background-color: #165364; }
-QTabWidget::pane { border: 0; padding-top: 12px; }
-QTabBar::tab { background: #1A1E25; color: #92A0B3; padding: 11px 18px; border-bottom: 2px solid transparent; margin-right: 4px; }
-QTabBar::tab:selected { color: #7BE6FB; background: #1D2C35; border-bottom: 2px solid #00B4D8; }
-QPlainTextEdit { background: #0F1319; border: 1px solid #2B3441; border-radius: 7px; padding: 8px; font-family: Consolas; font-size: 9pt; selection-background-color: #105269; }
-QTableWidget, QListWidget { background: #161B22; alternate-background-color: #1C222B; border: 1px solid #2B3441; border-radius: 7px; gridline-color: #272F3A; selection-background-color: #174453; }
-QListWidget#sidebar::item { padding: 5px 4px; min-height: 18px; border-radius: 5px; }
-QListWidget#sidebar::item:selected { background: #174453; color: #A5F0FF; }
-QHeaderView::section { background: #232B35; border: 0; padding: 9px; color: #99AFC3; font-weight: 600; }
-QCheckBox { spacing: 8px; background: transparent; }
-QCheckBox::indicator { width: 17px; height: 17px; border: 1px solid #455267; border-radius: 4px; background: #151B22; }
-QCheckBox::indicator:checked { background: #00A2C2; border-color: #71E5F5; }
-QProgressBar { border: 0; border-radius: 5px; background: #26303B; text-align: center; min-height: 10px; color: #CBE7EF; }
-QProgressBar::chunk { background: #00B4D8; border-radius: 4px; }
-QScrollBar:vertical { background: #151A21; width: 9px; margin: 0; }
-QScrollBar::handle:vertical { background: #3A4657; border-radius: 4px; min-height: 28px; }
+QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled { color: #8491A3; border-color: #303846; }
+QComboBox::drop-down { border: 0; width: 28px; }
+QComboBox::down-arrow { image: none; border: 0; width: 0; height: 0; }
+QComboBox QAbstractItemView { background: #232A34; color: #EDF2F7; selection-background-color: #164F60; border: 1px solid #48556A; border-radius: 12px; padding: 8px; outline: 0; }
+QComboBox QAbstractItemView::item { min-height: 44px; padding: 0 12px; border-radius: 12px; }
+QTabWidget::pane { border: 0; padding-top: 16px; }
+QTabBar::tab { background: #1C1F26; color: #B3BECD; padding: 12px 16px; border-radius: 12px; margin-right: 8px; }
+QTabBar::tab:selected { color: #A1EDFD; background: #203842; }
+QTabBar::tab:hover { background: #28313D; }
+QPlainTextEdit { background: #10151B; border: 1px solid #303846; border-radius: 12px; padding: 12px; font-family: Consolas; font-size: 10pt; selection-background-color: #126078; }
+QTableWidget, QListWidget { background: #181D24; alternate-background-color: #1E252E; border: 1px solid #303846; border-radius: 12px; gridline-color: #2D3542; selection-background-color: #174F60; outline: 0; }
+QListWidget::item { min-height: 44px; padding: 0 12px; border-radius: 12px; }
+QListWidget#sidebar { background: transparent; border: 0; padding: 0; }
+QListWidget#sidebar::item { padding: 8px 12px; min-height: 32px; border-radius: 12px; }
+QListWidget#sidebar::item:selected { background: #203B46; color: #A1EDFD; }
+QListWidget#sidebar::item:hover { background: #232D38; }
+QHeaderView::section { background: #232A34; border: 0; padding: 12px; color: #B3BECD; font-weight: 600; }
+QCheckBox { spacing: 12px; background: transparent; min-height: 32px; }
+QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #59677C; border-radius: 6px; background: #151A21; }
+QCheckBox::indicator:checked { background: #00B4D8; border-color: #A1EDFD; }
+QPushButton[accent='true']:disabled { color:#8491A3; background:#212730; border-color:#303846; }
+QLineEdit[technical='true'] { font-family:Consolas; font-size:10pt; }
+QProgressBar { border: 0; border-radius: 6px; background: #303B49; text-align: center; min-height: 12px; color: #EDF2F7; }
+QProgressBar::chunk { background: #00B4D8; border-radius: 6px; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 4px 0; }
+QScrollBar::handle:vertical { background: #455166; border-radius: 5px; min-height: 32px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QMenu { background: #222A34; border: 1px solid #3B4655; padding: 5px; }
-QMenu::item { padding: 8px 22px; }
-QMenu::item:selected { background: #164B5C; }
-QSplitter::handle { background: #252D38; height: 5px; }
-QToolTip { background: #29333F; color: #E7F6FA; border: 1px solid #00B4D8; padding: 6px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 0 4px; }
+QScrollBar::handle:horizontal { background: #455166; border-radius: 5px; min-width: 32px; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QMenu { background: #232A34; border: 1px solid #48556A; border-radius: 12px; padding: 8px; }
+QMenu::item { padding: 12px 28px 12px 16px; border-radius: 12px; }
+QMenu::item:selected { background: #164F60; }
+QMenu::item:disabled { color: #8491A3; }
+QMenu::separator { height: 1px; background: #3B4655; margin: 8px; }
+QSplitter::handle { background: #303846; height: 4px; width: 4px; }
+QToolTip { background: #232A34; color: #EDF2F7; border: 1px solid #48556A; border-radius: 12px; padding: 12px; }
+QDialog, QMessageBox { background: #121417; }
+QFrame#dropZone { background: #182B34; border: 2px dashed #367083; border-radius: 12px; }
 """
+
+_ICON_CACHE = {}
+
+def ui_icon(name, color=None, size=20):
+    """Resource-free, consistent 24-unit outline icons, including high-DPI pixmaps."""
+    color = color or UiTokens.secondary
+    key = (name, color, size)
+    if key in _ICON_CACHE: return _ICON_CACHE[key]
+    pix = QPixmap(size * 3, size * 3); pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix); p.setRenderHint(QPainter.RenderHint.Antialiasing); p.scale(size * 3 / 24, size * 3 / 24)
+    p.setPen(QPen(QColor(color), 1.65, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)); p.setBrush(Qt.BrushStyle.NoBrush)
+    def line(a,b,c,d): p.drawLine(QPointF(a,b), QPointF(c,d))
+    def rect(x,y,w,h,r=2): p.drawRoundedRect(QRectF(x,y,w,h),r,r)
+    def path(points):
+        q=QPainterPath(); q.moveTo(*points[0])
+        for pt in points[1:]: q.lineTo(*pt)
+        p.drawPath(q)
+    if name in ('monitor','camera','recents'):
+        rect(3,4,18,13); line(12,17,12,21); line(8,21,16,21)
+        if name=='camera': p.drawEllipse(QPointF(12,10),3,3)
+        if name=='recents': line(7,8,17,8); line(7,12,14,12)
+    elif name in ('apps','catalog'):
+        for x,y in ((4,4),(14,4),(4,14),(14,14)): rect(x,y,6,6,1.5)
+    elif name=='keyboard':
+        rect(2,5,20,14); line(8,16,16,16)
+        for y in (9,12):
+            for x in (6,10,14,18): line(x,y,x+.2,y)
+    elif name in ('folder','file','apk','archive'):
+        if name=='folder': path([(3,19),(3,5),(9,5),(11,8),(21,8),(21,19),(3,19)])
+        else:
+            path([(5,21),(5,3),(14,3),(19,8),(19,21),(5,21)]); path([(14,3),(14,8),(19,8)])
+            if name=='apk': path([(9,14),(12,17),(15,14)])
+            elif name=='archive': line(11,10,13,10); line(11,13,13,13); line(11,16,13,16)
+    elif name in ('upload','download','install','undo','back','chevron'):
+        if name in ('back','undo'): path([(10,5),(4,11),(10,17)]); line(4,11,19,11)
+        elif name=='chevron': path([(6,9),(12,15),(18,9)])
+        else:
+            line(12,3,12,16)
+            if name=='upload': path([(7,8),(12,3),(17,8)])
+            else: path([(7,11),(12,16),(17,11)])
+            path([(4,16),(4,21),(20,21),(20,16)])
+    elif name in ('search','eye'):
+        if name=='search': p.drawEllipse(QPointF(10,10),6,6); line(14.5,14.5,21,21)
+        else: path([(2,12),(7,6),(17,6),(22,12),(17,18),(7,18),(2,12)]); p.drawEllipse(QPointF(12,12),3,3)
+    elif name in ('play','stop','check','add','delete','rename','edit'):
+        if name=='play': path([(7,4),(20,12),(7,20),(7,4)])
+        elif name=='stop': rect(5,5,14,14)
+        elif name=='check': path([(4,12),(9,17),(20,6)])
+        elif name=='add': line(12,4,12,20); line(4,12,20,12)
+        elif name=='delete': line(3,6,21,6); path([(6,6),(7,21),(17,21),(18,6)]); path([(9,6),(9,3),(15,3),(15,6)]); line(10,10,10,17); line(14,10,14,17)
+        else: path([(4,20),(5,15),(17,3),(21,7),(9,19),(4,20)]); line(15,5,19,9)
+    elif name in ('copy','save'):
+        if name=='copy': rect(8,8,13,13); path([(16,5),(16,3),(3,3),(3,16),(5,16)])
+        else: path([(4,3),(17,3),(21,7),(21,21),(3,21),(3,3),(4,3)]); rect(7,3,9,6,0); rect(7,14,10,7,0)
+    elif name in ('info','globe','gauge','steering','recovery','refresh','settings'):
+        p.drawEllipse(QPointF(12,12),9,9)
+        if name=='info': line(12,10,12,17); line(12,7,12,7.2)
+        elif name=='globe': p.drawEllipse(QRectF(8,3,8,18)); line(3,12,21,12)
+        elif name in ('gauge','steering'): line(12,12,17,7); line(3,12,21,12); line(12,12,12,21)
+        elif name in ('refresh','recovery'): path([(16,2),(20,4),(18,8)]); path([(8,22),(4,20),(6,16)])
+        else:
+            p.drawEllipse(QPointF(12,12),3,3)
+            for x,y,x2,y2 in ((12,1,12,4),(12,20,12,23),(1,12,4,12),(20,12,23,12)): line(x,y,x2,y2)
+    elif name in ('wifi','usb','link'):
+        if name=='wifi':
+            p.drawArc(QRectF(2,4,20,18),40*16,100*16); p.drawArc(QRectF(6,8,12,12),40*16,100*16); p.drawEllipse(QPointF(12,18),1,1)
+        elif name=='usb': line(12,3,12,21); path([(8,7),(12,3),(16,7)]); path([(6,10),(6,14),(12,17),(18,14),(18,10)])
+        else: rect(3,6,11,7,3); rect(10,11,11,7,3); line(9,10,15,14)
+    elif name in ('volume','mic','shield','sliders','terminal','pulse','home','more'):
+        if name=='volume': path([(3,10),(7,10),(12,5),(12,19),(7,14),(3,14),(3,10)]); p.drawArc(QRectF(10,4,10,16),-70*16,140*16)
+        elif name=='mic': rect(9,3,6,13,3); path([(5,11),(5,15),(8,19),(16,19),(19,15),(19,11)]); line(12,19,12,22)
+        elif name=='shield': path([(12,2),(21,6),(19,16),(12,22),(5,16),(3,6),(12,2)])
+        elif name=='sliders':
+            for y,x in ((5,8),(12,16),(19,10)): line(3,y,21,y); rect(x-2,y-2,4,4,1)
+        elif name=='terminal': path([(4,6),(10,12),(4,18)]); line(12,18,21,18)
+        elif name=='pulse': path([(2,12),(7,12),(10,5),(14,19),(17,12),(22,12)])
+        elif name=='home': path([(2,11),(12,3),(22,11)]); path([(5,9),(5,21),(19,21),(19,9)]); rect(10,14,4,7,0)
+        else:
+            for x in (5,12,19): p.drawEllipse(QPointF(x,12),1,1)
+    else: rect(4,4,16,16); line(8,12,16,12)
+    p.end(); pix.setDevicePixelRatio(3); result=QIcon(pix); _ICON_CACHE[key]=result; return result
+
+
+class MotionController(QObject):
+    def __init__(self, main):
+        super().__init__(main); self.main=main
+        self.reduced = str(main.settings.value('ui.reduce_motion','false')).lower()=='true'
+        self.system_enabled=True
+        if sys.platform=='win32':
+            try:
+                value=ctypes.c_int(1)
+                if ctypes.windll.user32.SystemParametersInfoW(0x1042,0,ctypes.byref(value),0): self.system_enabled=bool(value.value)
+            except (AttributeError,OSError): pass
+    @property
+    def enabled(self): return self.system_enabled and not self.reduced and not self.main.smoke
+    def set_reduced(self,value): self.reduced=bool(value); self.main.settings.setValue('ui.reduce_motion',self.reduced)
+
+
+def motion_enabled(widget):
+    root=widget.window()
+    main=getattr(widget,'main',None) or getattr(root,'main',None) or root
+    return bool(getattr(getattr(main,'motion',None),'enabled',False))
+
+
+def update_help(widget, main, reason=None):
+    if reason is not None: widget.setProperty('disabled_reason',reason)
+    help_key=widget.property('help_key') or ''
+    text=main.t(help_key) if help_key else ''
+    why=widget.property('disabled_reason') or ''
+    if why: text=(text+'\n\n' if text else '')+main.t(why)
+    widget.setToolTip(text)
+
+
+NativePushButton=QPushButton
+class VoyahButton(NativePushButton):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs); self._hover=0.; self._local_enabled=True; self._policy_enabled=True
+        self.setMinimumHeight(44); self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.animation=QVariantAnimation(self); self.animation.setDuration(110); self.animation.valueChanged.connect(self._hover_changed)
+    def _hover_changed(self,value): self._hover=float(value); self.update()
+    def _animate(self,value):
+        self.animation.stop()
+        if motion_enabled(self): self.animation.setStartValue(self._hover); self.animation.setEndValue(value); self.animation.start()
+        else: self._hover=value; self.update()
+    def enterEvent(self,event): super().enterEvent(event); self._animate(1.)
+    def leaveEvent(self,event): super().leaveEvent(event); self._animate(0.)
+    def setEnabled(self,value):
+        self._local_enabled=bool(value); super().setEnabled(self._local_enabled and self._policy_enabled)
+    def setPolicyEnabled(self,value,main=None):
+        self._policy_enabled=bool(value); super().setEnabled(self._local_enabled and self._policy_enabled)
+        if main: update_help(self,main,'' if value else 'Отключено администратором')
+    def paintEvent(self,event):
+        p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        accent=bool(self.property('accent')); danger=bool(self.property('danger'))
+        base=QColor('#00B4D8' if accent else '#28313D'); hover=QColor('#34CBE8' if accent else '#344152')
+        if not self.isEnabled(): base=hover=QColor('#212730')
+        if self.isDown(): base=hover=QColor('#138BA5' if accent else '#164C5B')
+        color=QColor.fromRgbF(*(base.getRgbF()[i]*(1-self._hover)+hover.getRgbF()[i]*self._hover for i in range(3)))
+        border=QColor('#80515C' if danger else '#3B4655')
+        if (self.hasFocus() or self._hover>.3) and self.isEnabled(): border=QColor('#00B4D8')
+        p.setPen(QPen(border,1)); p.setBrush(color); p.drawRoundedRect(QRectF(self.rect()).adjusted(.5,.5,-.5,-.5),12,12)
+        option=QStyleOptionButton(); self.initStyleOption(option); option.rect=self.rect().adjusted(12,0,-12,0)
+        text_color=QColor('#8491A3' if not self.isEnabled() else '#071C24' if accent else '#FFA4AA' if danger else '#EDF2F7')
+        option.palette.setColor(QPalette.ColorRole.ButtonText,text_color)
+        self.style().drawControl(QStyle.ControlElement.CE_PushButtonLabel,option,p,self)
+    def sizeHint(self):
+        result=super().sizeHint(); return QSize(result.width()+8,max(44,result.height()))
+
+QPushButton=VoyahButton
+
+
+def rounded_mask(widget):
+    path=QPainterPath(); path.addRoundedRect(QRectF(widget.rect()),12,12)
+    widget.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+
+def animate_popup(widget,owner):
+    rounded_mask(widget)
+    if not motion_enabled(owner): widget.setWindowOpacity(1); return
+    old=getattr(owner,'_popup_animation',None)
+    if old: old.stop()
+    target=widget.pos(); screen=widget.screen().availableGeometry()
+    group=QParallelAnimationGroup(owner)
+    opacity=QPropertyAnimation(widget,b'windowOpacity',group); opacity.setDuration(160); opacity.setStartValue(0.); opacity.setEndValue(1.)
+    position=QPropertyAnimation(widget,b'pos',group); position.setDuration(160); position.setEasingCurve(QEasingCurve.Type.OutCubic)
+    start=QPoint(target.x(),min(target.y()+6,screen.bottom()-widget.height()+1)); position.setStartValue(start); position.setEndValue(target)
+    owner._popup_animation=group; group.start()
+
+
+NativeComboBox=QComboBox
+class VoyahComboBox(NativeComboBox):
+    """Qt's accessible native selection model, with one rounded animated popup."""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs); self.setMinimumHeight(44); self.setMaxVisibleItems(8)
+        self.setSizeAdjustPolicy(NativeComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(8)
+    def paintEvent(self,event):
+        super().paintEvent(event)
+        p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(QColor('#B3BECD' if self.isEnabled() else '#8491A3'),1.6,Qt.PenStyle.SolidLine,Qt.PenCapStyle.RoundCap,Qt.PenJoinStyle.RoundJoin))
+        x,y=self.width()-17,self.height()/2
+        p.drawLine(QPointF(x-4,y-2),QPointF(x,y+2)); p.drawLine(QPointF(x,y+2),QPointF(x+4,y-2))
+    def showPopup(self):
+        super().showPopup(); popup=self.view().window()
+        popup.setStyleSheet('QFrame { background:#232A34; border:1px solid #48556A; border-radius:12px; } QListView { border:0; padding:8px; background:#232A34; } QListView::item { min-height:44px; padding:0 12px; border-radius:12px; }')
+        area=self.screen().availableGeometry(); below=self.mapToGlobal(QPoint(0,self.height()+8)); above=self.mapToGlobal(QPoint(0,-popup.height()-8))
+        y=below.y() if below.y()+popup.height()<=area.bottom()+1 else above.y()
+        popup.move(max(area.left(),min(below.x(),area.right()-popup.width()+1)),max(area.top(),min(y,area.bottom()-popup.height()+1)))
+        animate_popup(popup,self)
+    def hidePopup(self):
+        if getattr(self,'_popup_animation',None): self._popup_animation.stop()
+        self.view().window().setWindowOpacity(1); super().hidePopup()
+
+QComboBox=VoyahComboBox
+
+
+NativeMenu=QMenu
+class RoundedMenu(NativeMenu):
+    def addMenu(self,*args):
+        if len(args)==1 and isinstance(args[0],NativeMenu): return super().addMenu(args[0])
+        title=args[-1]; submenu=RoundedMenu(title,self)
+        if len(args)==2: submenu.setIcon(args[0])
+        super().addMenu(submenu); return submenu
+    def showEvent(self,event): super().showEvent(event); animate_popup(self,self.parentWidget() or self)
+    def hideEvent(self,event):
+        owner=self.parentWidget() or self
+        if getattr(owner,'_popup_animation',None): owner._popup_animation.stop()
+        self.setWindowOpacity(1); super().hideEvent(event)
+QMenu=RoundedMenu
+
+
+class SurfaceCard(QFrame):
+    def __init__(self,parent=None):
+        super().__init__(parent); self.setObjectName('card'); self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Preferred)
+
+
+class ResponsiveGrid(QWidget):
+    def __init__(self,min_card_width=280,max_columns=3,parent=None):
+        super().__init__(parent); self.min_card_width=min_card_width; self.max_columns=max_columns; self.widgets=[]; self.columns=0
+        self.grid=QGridLayout(self); self.grid.setContentsMargins(0,0,0,0); self.grid.setSpacing(16); self.grid.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.grid.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+    def minimumSizeHint(self): return QSize(0,0)
+    def sizeHint(self):
+        return QSize(self.min_card_width,self.grid.sizeHint().height())
+    def addWidget(self,widget): self.widgets.append(widget); self.reflow()
+    def addCard(self,widget): self.addWidget(widget)
+    def count(self): return len(self.widgets)
+    def itemAt(self,index): return QWidgetItem(self.widgets[index]) if 0<=index<len(self.widgets) else None
+    def takeAt(self,index):
+        if not 0<=index<len(self.widgets): return None
+        widget=self.widgets.pop(index); self.grid.removeWidget(widget); self.reflow(); return QWidgetItem(widget)
+    def clear(self):
+        while self.widgets:
+            widget=self.widgets.pop(); self.grid.removeWidget(widget); widget.hide(); widget.deleteLater()
+        self.columns=0
+    def resizeEvent(self,event): super().resizeEvent(event); self.reflow()
+    def reflow(self):
+        cols=max(1,min(self.max_columns,(max(1,self.width())+16)//(self.min_card_width+16)))
+        while self.grid.count(): self.grid.takeAt(0)
+        for col in range(self.max_columns): self.grid.setColumnStretch(col,1 if col<cols else 0)
+        for i,widget in enumerate(self.widgets): self.grid.addWidget(widget,i//cols,i%cols,Qt.AlignmentFlag.AlignTop)
+        self.columns=cols
+
+
+class EmptyState(QFrame):
+    def __init__(self,title,description,icon='info',parent=None):
+        super().__init__(parent); self.setObjectName('card'); row=QVBoxLayout(self); row.setContentsMargins(24,24,24,24); row.setSpacing(12)
+        emblem=QLabel(); emblem.setPixmap(ui_icon(icon,UiTokens.accent,32).pixmap(32,32)); row.addWidget(emblem)
+        self.title=QLabel(title); self.title.setObjectName('section'); self.title.setWordWrap(True); row.addWidget(self.title)
+        self.description=QLabel(description); self.description.setObjectName('hint'); self.description.setWordWrap(True); row.addWidget(self.description)
+
+
+class Disclosure(QFrame):
+    def __init__(self,title,main,parent=None,expanded=False):
+        super().__init__(parent); self.main=main; self.setObjectName('disclosure'); self.expanded=expanded
+        outer=QVBoxLayout(self); outer.setContentsMargins(0,0,0,0); outer.setSpacing(8)
+        self.toggle=VoyahButton(title); self.toggle.setIcon(ui_icon('chevron')); self.toggle.setCheckable(True); self.toggle.setChecked(expanded); self.toggle.clicked.connect(self.setExpanded); outer.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
+        self.content=QWidget(); self.content.setObjectName('disclosureContent'); self.body=QVBoxLayout(self.content); self.body.setContentsMargins(0,4,0,0); self.body.setSpacing(12); outer.addWidget(self.content)
+        self.content.setVisible(expanded); self.content.setMaximumHeight(16777215 if expanded else 0)
+        self.animation=QPropertyAnimation(self.content,b'maximumHeight',self); self.animation.setDuration(200); self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic); self.animation.finished.connect(self._settled)
+    def setTitle(self,title): self.toggle.setText(title)
+    def setExpanded(self,expanded,animate=True):
+        self.expanded=bool(expanded); self.toggle.setChecked(self.expanded); self.animation.stop()
+        if animate and self.main.motion.enabled:
+            start=self.content.height() if self.content.isVisible() else 0; self.content.setVisible(True)
+            self.animation.setStartValue(start); self.animation.setEndValue(self.content.sizeHint().height() if expanded else 0); self.animation.start()
+        else: self._settled()
+    def _settled(self): self.content.setMaximumHeight(16777215 if self.expanded else 0); self.content.setVisible(self.expanded)
+
+
+class AnimatedStack(QStackedWidget):
+    def __init__(self,main): super().__init__(); self.main=main; self.fade=None
+    def setCurrentIndex(self,index):
+        if index==self.currentIndex(): return
+        if self.fade:
+            self.fade.stop()
+            if getattr(self,'faded_widget',None): self.faded_widget.setGraphicsEffect(None)
+        super().setCurrentIndex(index)
+        current=self.currentWidget()
+        if current and self.main.motion.enabled:
+            effect=QGraphicsOpacityEffect(current); current.setGraphicsEffect(effect); self.faded_widget=current
+            self.fade=QPropertyAnimation(effect,b'opacity',self); self.fade.setDuration(140); self.fade.setStartValue(.35); self.fade.setEndValue(1.)
+            self.fade.finished.connect(lambda w=current:w.setGraphicsEffect(None)); self.fade.start()
+
+
+class StatusDot(QLabel):
+    def __init__(self): super().__init__(); self.setFixedSize(14,14); self.state_color='#F17783'
+    def setStyleSheet(self,style):
+        match=re.search(r'color:\s*(#[\da-fA-F]{6})',style)
+        if match: self.state_color=match.group(1); self.update()
+    def paintEvent(self,event):
+        p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing); p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(self.state_color)); p.drawEllipse(QRectF(2,2,10,10))
+
+
+ACTION_HELP = {
+ 'Подключить':'Подключает выбранный автомобиль. Для первого соединения по кабелю подтвердите запрос на экране автомобиля.',
+ 'Обновить':'Проверяет, какие автомобили сейчас доступны для подключения.',
+ 'Назад':'Возвращает на предыдущий экран в автомобиле.',
+ 'Домой':'Открывает главный экран автомобиля.',
+ 'Недавние':'Показывает недавно открытые приложения в автомобиле.',
+ 'Скриншот':'Сохраняет снимок экрана автомобиля на компьютер.',
+ 'Отменить задание':'Останавливает текущее действие. Уже выполненные изменения могут сохраниться.',
+ 'Выбрать ADB':'Позволяет выбрать файл средства связи с автомобилем на вашем компьютере.',
+ 'Встроенный ADB':'Использует средство связи, которое уже входит в программу.',
+ 'Перезапуск ADB':'Перезапускает связь с автомобилем, если подключение перестало отвечать.',
+ 'USB → Wi-Fi :5555':'Подготавливает подключённый по кабелю автомобиль к работе через Wi-Fi и показывает его адреса.',
+ 'Расширенный режим':'Открывает действия для расширенного доступа. Некоторые прошивки не разрешают такой доступ.',
+ 'Перезагрузка':'Показывает варианты перезапуска автомобиля. Каждое действие требует подтверждения.',
+ 'Открыть журнал':'Открывает сохранённую запись действий и ошибок программы.',
+ 'О приложении':'Показывает версию программы и сведения о её работе.',
+ 'Настройки подключения и устройства':'Показывает способ подключения, адрес автомобиля и дополнительные действия.',
+ 'Журнал операций':'Показывает подробную запись выполненных действий и ответов автомобиля.',
+}
+
 
 def make_icon() -> QIcon:
     pix = QPixmap(128, 128); pix.fill(Qt.GlobalColor.transparent)
@@ -525,7 +885,7 @@ def table(columns):
     w = QTableWidget(0, len(columns)); w.setHorizontalHeaderLabels(columns)
     w.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     w.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); w.setAlternatingRowColors(True)
-    w.verticalHeader().hide(); w.verticalHeader().setDefaultSectionSize(34); w.horizontalHeader().setStretchLastSection(True)
+    w.verticalHeader().hide(); w.verticalHeader().setDefaultSectionSize(44); w.horizontalHeader().setStretchLastSection(True)
     w.horizontalHeader().setMinimumSectionSize(130)
     return w
 
@@ -567,18 +927,22 @@ class Page(QWidget):
     def t(self, text, **values): return self.main.t(text, **values)
 
     def bind(self, obj, key, method='setText'):
-        self.bindings.append((obj, key, method)); getattr(obj, method)(self.t(key)); return obj
+        self.bindings.append((obj, key, method)); getattr(obj, method)(self.t(key))
+        if method=='setToolTip': obj.setProperty('help_key',key); update_help(obj,self.main)
+        return obj
 
-    def button(self, key, callback, accent=False, danger=False):
+    def button(self, key, callback, accent=False, danger=False, icon=None, help_key=None):
         w = self.bind(QPushButton(), key); w.clicked.connect(callback)
         if getattr(callback, 'feature_id', None): w.setProperty('feature', callback.feature_id)
-        if accent: w.setProperty('accent', True)
-        if danger: w.setProperty('danger', True)
+        w.setProperty('accent',accent); w.setProperty('danger',danger)
+        if icon: w.setIcon(ui_icon(icon,'#071C24' if accent else None))
+        w.setProperty('help_key',help_key or ACTION_HELP.get(key,key)); update_help(w,self.main)
         return w
 
     def label(self, key, style=None):
         w = self.bind(QLabel(), key)
         if style: w.setObjectName(style)
+        w.setWordWrap(True)
         return w
 
     def edit(self, placeholder=''):
@@ -586,23 +950,36 @@ class Page(QWidget):
         if placeholder: self.bind(w, placeholder, 'setPlaceholderText')
         return w
 
-    def card(self, title):
-        frame = QFrame(); frame.setObjectName('card'); layout = QVBoxLayout(frame)
-        group = {'Масштаб и дисплеи':'tweaks.dpi','Аудиофокус и разрешения':'tweaks.permissions','Сеть и система':'tweaks.network'}.get(title)
+    def card(self, title, description=''):
+        frame=SurfaceCard(); layout=QVBoxLayout(frame); layout.setContentsMargins(16,16,16,16); layout.setSpacing(12); layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        group={'Масштаб и дисплеи':'tweaks.dpi','Аудиофокус и разрешения':'tweaks.permissions','Сеть и система':'tweaks.network'}.get(title)
         if group: frame.setProperty('feature',group)
-        layout.setContentsMargins(18, 16, 18, 16); layout.setSpacing(12)
-        if title: layout.addWidget(self.label(title, 'section'))
+        if title: layout.addWidget(self.label(title,'section'))
+        if description: layout.addWidget(self.hint(description))
         self.layout.addWidget(frame); return layout
 
     def row(self, layout, *widgets):
-        row = FlowLayout()
+        stretch=any(isinstance(w,(QLineEdit,QComboBox,QSpinBox)) for w in widgets)
+        row=QHBoxLayout() if stretch else FlowLayout(); row.setSpacing(8)
         for w in widgets:
-            if isinstance(w, QWidget): row.addWidget(w)
+            if isinstance(w,QWidget):
+                if stretch: row.addWidget(w,1 if isinstance(w,QLineEdit) else 0)
+                else: row.addWidget(w)
+            elif isinstance(w,int): row.addStretch(w)
         layout.addLayout(row); return row
 
     def retranslate(self):
-        for obj, key, method in self.bindings:
-            getattr(obj, method)(self.t(key))
+        for obj,key,method in self.bindings:
+            try:
+                getattr(obj,method)(self.t(key))
+                if obj.property('help_key'): update_help(obj,self.main)
+            except RuntimeError: continue
+
+    def hint(self,text):
+        w=self.label(text,'hint'); w.setWordWrap(True); return w
+
+    def disclosure(self,title,layout,expanded=False):
+        w=Disclosure(self.t(title),self.main,expanded=expanded); self.bind(w,title,'setTitle'); layout.addWidget(w); return w
 
     def save_text(self, text, name='voyah-log.txt', open_notepad=False):
         file, _ = QFileDialog.getSaveFileName(self, self.t('Сохранить'), str(Path.home() / 'Documents' / name), 'Text (*.txt);;All (*)')
@@ -836,7 +1213,8 @@ FEATURES = {
     'repair.verity': 'Починить verity', 'keyboard.install': 'Установка клавиатур',
     'keyboard.restore': 'Восстановление клавиатур',
 }
-SECTION_NAMES = {key: FEATURES[key] for key in ('catalog','installer','keyboards','inspector','files','apps','tweaks','terminal')}
+SECTION_NAMES = {'catalog':'Каталог приложений','installer':'APK с ПК','keyboards':'Клавиатуры','inspector':'Инспектор','files':'Файлы','apps':'Установленные приложения','tweaks':'Твики','terminal':'Терминал'}
+SECTION_HELP = {'catalog': 'Выберите готовое приложение — программа скачает его и установит в автомобиль.', 'installer': 'Выберите файлы на компьютере или перетащите их сюда для установки.', 'keyboards': 'Установите выбранную клавиатуру на оба экрана или верните штатную.', 'inspector': 'Узнайте, что открыто на экранах и какие события происходят в автомобиле.', 'files': 'Передавайте файлы между компьютером и памятью автомобиля.', 'apps': 'Запускайте приложения и управляйте тем, что уже установлено.', 'tweaks': 'Настройте размер элементов, звук и внешний вид. Здесь же доступны действия восстановления.', 'terminal': 'Для опытных: команды выполняются на выбранном автомобиле. Проверьте их перед запуском.'}
 KEYBOARD_MODELS = ('f0506h', 'f6802h', 'f0505h', 'f6804h')
 KEYBOARD_PATHS = (
     ('com.qinggan.app.qgime', '/system/priv-app/QGIME-release-signed/QGIME-release-signed.apk'),
@@ -1113,7 +1491,7 @@ class MainWindow(QMainWindow):
         self.adb_path = self.tools.find_adb(self.settings.value('adb_path', ''))
         self.setWindowTitle('Voyah Manager'); self.setWindowIcon(make_icon()); self.resize(1400, 940); self.setMinimumSize(820, 620); self.setAcceptDrops(True)
         self.web = WebClient(self); self.catalog = CatalogStore(self); self.admin_dialog = None; self.recipe = None
-        self.build_ui(); self.retranslate(); self.catalog.changed.connect(self.apply_policy)
+        self.motion=MotionController(self); self.build_ui(); self.retranslate(); self.catalog.changed.connect(self.apply_policy)
         self.admin_shortcut = QShortcut(QKeySequence('Ctrl+Shift+Alt+A'), self, activated=self.open_admin)
         available = QApplication.primaryScreen().availableGeometry(); self.setMinimumSize(min(820,available.width()-32),min(620,available.height()-32)); self.resize(min(1400, available.width()-32), min(940, available.height()-32))
         self.poll = QTimer(self); self.poll.timeout.connect(self.refresh_devices); self.poll.start(5000)
@@ -1122,70 +1500,92 @@ class MainWindow(QMainWindow):
     def t(self, text, **values): return tr(text, self.lang, **values)
 
     def bind(self, obj, key, method='setText'):
-        self.binding.append((obj, key, method)); getattr(obj, method)(self.t(key)); return obj
+        self.binding.append((obj, key, method)); getattr(obj, method)(self.t(key))
+        if method=='setToolTip': obj.setProperty('help_key',key); update_help(obj,self)
+        return obj
 
-    def button(self, key, fn, accent=False):
+    def button(self, key, fn, accent=False, icon=None, help_key=None):
         w = self.bind(QPushButton(), key); w.clicked.connect(fn)
-        if getattr(fn, 'feature_id', None): w.setProperty('feature', fn.feature_id)
-        if accent: w.setProperty('accent', True)
+        if getattr(fn,'feature_id',None): w.setProperty('feature',fn.feature_id)
+        w.setProperty('accent',accent)
+        if icon: w.setIcon(ui_icon(icon, '#071C24' if accent else None))
+        w.setAccessibleName(self.t(key))
+        w.setProperty('help_key',help_key or ACTION_HELP.get(key,key)); update_help(w,self)
         return w
 
     def build_ui(self):
-        root = QWidget(); self.setCentralWidget(root); outer = QVBoxLayout(root); outer.setContentsMargins(22, 18, 22, 12); outer.setSpacing(12)
-        brand = QHBoxLayout(); emblem = QLabel(); emblem.setPixmap(make_icon().pixmap(48, 48)); brand.addWidget(emblem)
-        names = QVBoxLayout(); label = QLabel('VOYAH MANAGER'); label.setObjectName('title'); names.addWidget(label)
-        names.addWidget(self.bind(QLabel(), 'Диагностика • управление • мультимедиа')); brand.addLayout(names); brand.addStretch()
-        self.device_info = QLabel('SNAPDRAGON 8155  /  ADB WORKBENCH'); self.device_info.setObjectName('subtitle'); brand.addWidget(self.device_info)
-        self.language = QComboBox(); self.language.addItem('Русский', 'ru'); self.language.addItem('English', 'en'); self.language.setCurrentIndex(1 if self.lang == 'en' else 0)
-        self.language.currentIndexChanged.connect(self.change_language); brand.addWidget(self.language)
-        brand.addWidget(self.button('О приложении', self.about)); outer.addLayout(brand)
-        header = QFrame(); header.setObjectName('header'); h = QVBoxLayout(header); h.setContentsMargins(14, 12, 14, 12); h.setSpacing(9)
-        row = QHBoxLayout(); self.status_dot = QLabel('●'); self.status_dot.setStyleSheet('color:#EF707B;font-size:18pt;'); row.addWidget(self.status_dot)
-        self.connection_status = QLabel(); self.connection_status.setMinimumWidth(115); self.connection_status.setMaximumWidth(270); row.addWidget(self.connection_status)
-        self.mode = QComboBox(); self.mode.addItem('USB', 'usb'); self.mode.addItem('Wi-Fi', 'wifi'); self.mode.currentIndexChanged.connect(self.mode_changed); row.addWidget(self.mode)
-        self.device_combo = QComboBox(); self.device_combo.setMinimumWidth(120); self.device_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon); self.device_combo.currentIndexChanged.connect(self.device_selected); row.addWidget(self.device_combo, 1)
-        self.ip = QLineEdit(self.settings.value('ip', '')); self.ip.setPlaceholderText('192.168.1.100:5555'); self.ip.setMaximumWidth(220)
-        self.voyah_wifi = QPushButton('Voyah :5578'); self.voyah_wifi.setToolTip('192.168.43.1:5578 · ' + self.t('Из отчёта установщика; применимость зависит от прошивки.')); self.voyah_wifi.clicked.connect(lambda: self.ip.setText('192.168.43.1:5578'))
-        self.connect_btn = self.button('Подключить', self.connect_device, True); row.addWidget(self.connect_btn)
-        row.addWidget(self.button('Обновить', self.refresh_devices)); h.addLayout(row)
-        self.wifi_row = QWidget(); address_row = QHBoxLayout(self.wifi_row); address_row.setContentsMargins(0,0,0,0); address_row.addWidget(self.ip); address_row.addWidget(self.voyah_wifi); address_row.addStretch(); h.addWidget(self.wifi_row)
-        self.connection_details = QFrame(); details = QVBoxLayout(self.connection_details); details.setContentsMargins(0,0,0,0)
-        row = FlowLayout(); row.addWidget(self.button('USB → Wi-Fi :5555', self.usb_wifi)); self.adb_label = QLabel(); self.adb_label.setObjectName('subtitle'); self.adb_label.setMaximumWidth(380); self.adb_label.setWordWrap(True); self.adb_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); row.addWidget(self.adb_label)
-        row.addWidget(self.button('Выбрать ADB', self.choose_adb)); row.addWidget(self.button('Встроенный ADB', self.use_bundled)); row.addWidget(self.button('Перезапуск ADB', self.restart_adb))
-        self.root_button = self.button('Расширенный режим', self.root_menu); row.addWidget(self.root_button)
-        self.reboot_button = self.button('Перезагрузка', self.reboot_menu); row.addWidget(self.reboot_button); details.addLayout(row)
-        toggle = self.button('Настройки подключения и устройства', lambda: self.connection_details.setVisible(not self.connection_details.isVisible())); h.addWidget(toggle); h.addWidget(self.connection_details); self.connection_details.hide()
-        outer.addWidget(header)
-        nav = FlowLayout()
-        for text, code in [('Назад', 4), ('Домой', 3), ('Недавние', 187)]:
-            nav.addWidget(self.button(text, lambda checked=False, c=code: self.keyevent(c)))
-        nav.addWidget(self.button('Скриншот', self.screenshot)); nav.addStretch()
-        self.operation_label = QLabel(); self.operation_label.setMaximumWidth(220); self.operation_label.setWordWrap(True); self.operation_label.setObjectName('subtitle'); nav.addWidget(self.operation_label)
-        self.global_progress = QProgressBar(); self.global_progress.setMaximumWidth(160); self.global_progress.setMaximumHeight(12); self.global_progress.setTextVisible(False); self.global_progress.hide(); nav.addWidget(self.global_progress)
-        self.cancel_btn = self.button('Отменить задание', self.cancel_operation); self.cancel_btn.setEnabled(False); nav.addWidget(self.cancel_btn)
-        outer.addLayout(nav)
+        root=QWidget(); self.setCentralWidget(root); outer=QHBoxLayout(root); outer.setContentsMargins(16,16,16,16); outer.setSpacing(16)
+        self.sidebar_panel=QFrame(); self.sidebar_panel.setObjectName('sidebarPanel'); self.sidebar_panel.setFixedWidth(240)
+        side=QVBoxLayout(self.sidebar_panel); side.setContentsMargins(12,20,12,16); side.setSpacing(16)
+        brand=QHBoxLayout(); logo=QLabel(); logo.setPixmap(make_icon().pixmap(36,36)); brand.addWidget(logo)
+        self.brand_label=QLabel('VOYAH\nMANAGER'); self.brand_label.setStyleSheet('font-size:12pt;font-weight:700;letter-spacing:1px;'); brand.addWidget(self.brand_label,1); side.addLayout(brand)
+        self.sidebar=QListWidget(); self.sidebar.setObjectName('sidebar'); self.sidebar.setSpacing(4); self.sidebar.setWordWrap(True); self.sidebar.setIconSize(QSize(22,22)); self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        side.addWidget(self.sidebar,1)
+        self.sidebar_version=QLabel('v'+VERSION); self.sidebar_version.setObjectName('subtitle'); side.addWidget(self.sidebar_version)
+        self.about_button=self.button('О приложении',self.about,icon='info'); side.addWidget(self.about_button)
+        outer.addWidget(self.sidebar_panel)
+        right=QVBoxLayout(); right.setSpacing(16); outer.addLayout(right,1)
+        header=QFrame(); header.setObjectName('header'); h=QVBoxLayout(header); h.setContentsMargins(16,12,16,12); h.setSpacing(12)
+        row=QHBoxLayout(); row.setSpacing(12)
+        self.status_dot=StatusDot(); row.addWidget(self.status_dot)
+        status=QVBoxLayout(); status.setSpacing(2); self.vehicle_label=self.bind(QLabel(),'Ваш автомобиль'); self.vehicle_label.setStyleSheet('font-weight:600;background:transparent;'); status.addWidget(self.vehicle_label)
+        self.connection_status=QLabel(); self.connection_status.setObjectName('subtitle'); self.connection_status.setWordWrap(True); status.addWidget(self.connection_status); row.addLayout(status,1)
+        self.connect_btn=self.button('Подключить',self.connect_device,True,icon='link'); row.addWidget(self.connect_btn)
+        self.connection_toggle=self.button('Настройки подключения и устройства',lambda:self.connection_disclosure.setExpanded(not self.connection_disclosure.expanded),icon='settings')
+        self.connection_toggle.setText(''); self.connection_toggle.setFixedSize(44,44); row.addWidget(self.connection_toggle)
+        self.nav_buttons=[]
+        for key,code,icon in [('Назад',4,'back'),('Домой',3,'home'),('Недавние',187,'recents')]:
+            button=self.button(key,lambda checked=False,c=code:self.keyevent(c),icon=icon); button.setProperty('icon_only',True); button.setText(''); button.setFixedSize(36,36); button.setMinimumHeight(36); row.addWidget(button); self.nav_buttons.append(button)
+        shot=self.button('Скриншот',self.screenshot,icon='camera'); shot.setProperty('icon_only',True); shot.setText(''); shot.setFixedSize(36,36); shot.setMinimumHeight(36); row.addWidget(shot); self.nav_buttons.append(shot)
+        self.language=QComboBox(); self.language.addItem('Русский','ru'); self.language.addItem('English','en'); self.language.setCurrentIndex(1 if self.lang=='en' else 0); self.language.setMinimumContentsLength(6); self.language.setFixedWidth(120); self.language.currentIndexChanged.connect(self.change_language); row.addWidget(self.language)
+        h.addLayout(row)
+        self.connection_disclosure=Disclosure('',self); self.connection_disclosure.toggle.hide(); self.connection_details=self.connection_disclosure.content
+        details=self.connection_disclosure.body
+        selection=QHBoxLayout(); self.mode=QComboBox(); self.mode.addItem('USB','usb'); self.mode.addItem('Wi-Fi','wifi'); self.mode.setFixedWidth(130); self.mode.currentIndexChanged.connect(self.mode_changed); selection.addWidget(self.mode)
+        self.device_combo=QComboBox(); self.device_combo.setMinimumWidth(140); self.device_combo.currentIndexChanged.connect(self.device_selected); selection.addWidget(self.device_combo,1); selection.addWidget(self.button('Обновить',self.refresh_devices,icon='refresh')); details.addLayout(selection)
+        self.ip=QLineEdit(self.settings.value('ip','')); self.ip.setPlaceholderText('192.168.1.100:5555')
+        self.voyah_wifi=self.button('Voyah :5578',lambda:self.ip.setText('192.168.43.1:5578'),help_key='Подставляет адрес из отчёта установщика. Подходит только для прошивок с таким способом подключения.')
+        self.wifi_row=QWidget(); address=QHBoxLayout(self.wifi_row); address.setContentsMargins(0,0,0,0); address.addWidget(self.ip,1); address.addWidget(self.voyah_wifi); details.addWidget(self.wifi_row)
+        self.device_info=QLabel(); self.device_info.setObjectName('subtitle'); self.device_info.setWordWrap(True); details.addWidget(self.device_info)
+        tools_row=FlowLayout(); tools_row.addWidget(self.button('USB → Wi-Fi :5555',self.usb_wifi,icon='wifi')); tools_row.addWidget(self.button('Выбрать ADB',self.choose_adb,icon='folder')); tools_row.addWidget(self.button('Встроенный ADB',self.use_bundled,icon='archive')); tools_row.addWidget(self.button('Перезапуск ADB',self.restart_adb,icon='refresh')); details.addLayout(tools_row)
+        self.adb_label=QLabel(); self.adb_label.setObjectName('subtitle'); self.adb_label.setWordWrap(True); self.adb_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); details.addWidget(self.adb_label)
+        access=FlowLayout(); self.root_button=self.button('Расширенный режим',self.root_menu,icon='shield'); access.addWidget(self.root_button); self.reboot_button=self.button('Перезагрузка',self.reboot_menu,icon='recovery'); access.addWidget(self.reboot_button)
+        self.reduce_motion=self.bind(QCheckBox(),'Уменьшить анимацию'); self.reduce_motion.setChecked(self.motion.reduced or not self.motion.system_enabled); self.reduce_motion.toggled.connect(self.motion.set_reduced); self.reduce_motion.setProperty('help_key','Убирает плавные переходы и раскрытие меню. Все действия остаются доступными.'); access.addWidget(self.reduce_motion); details.addLayout(access)
+        h.addWidget(self.connection_disclosure); right.addWidget(header)
         if self.demo:
-            badge = self.bind(QLabel(), 'Демонстрационный режим • команды имитируются'); badge.setStyleSheet('color:#F5CE7E;padding:7px;background:#332D22;border-radius:5px;'); outer.addWidget(badge)
-        body = QHBoxLayout(); body.setSpacing(16)
-        self.sidebar = QListWidget(); self.sidebar.setObjectName('sidebar'); self.sidebar.setFixedWidth(260); self.sidebar.setSpacing(4); self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.stack = QStackedWidget(); self.pages = {}; self.section_items = {}
-        factories = {'catalog': CatalogPage, 'installer': InstallerPage, 'keyboards': KeyboardPage, 'inspector': InspectorPage, 'files': ExplorerPage, 'apps': AppsPage, 'tweaks': TweaksPage, 'terminal': TerminalPage}
-        symbols = ['◈','↓','⌨','◉','▤','▦','⚙','›_']
-        for (key, title), symbol in zip(SECTION_NAMES.items(), symbols):
-            page = factories[key](self); self.pages[key] = page
-            if key in ('catalog','keyboards','files','apps','tweaks'):
-                page.layout.removeWidget(page.log); page.log.hide()
-            item = QListWidgetItem(symbol + '  ' + self.t(title)); item.setData(Qt.ItemDataRole.UserRole, key); item.setData(Qt.ItemDataRole.UserRole + 1, symbol); item.setToolTip(self.t(title)); self.sidebar.addItem(item); self.section_items[key] = item
-            scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame); scroll.setWidget(page); scroll.setProperty('section',key); self.stack.addWidget(scroll)
-        self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex); self.sidebar.setCurrentRow(0)
-        body.addWidget(self.sidebar); body.addWidget(self.stack,1); outer.addLayout(body,1)
-        self.journal_toggle = self.button('Журнал операций', lambda: self.shared_log.setVisible(not self.shared_log.isVisible())); outer.addWidget(self.journal_toggle)
-        self.shared_log = logbox(); self.shared_log.setMaximumHeight(170); self.shared_log.hide(); outer.addWidget(self.shared_log)
-        self.apply_policy()
-        foot = QHBoxLayout(); self.notice_label = QLabel(); self.notice_label.setObjectName('subtitle'); foot.addWidget(self.notice_label, 1)
-        foot.addWidget(self.button('Открыть журнал', lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(DATA_DIR / 'voyah-manager.log')))))
-        version = QLabel('v' + VERSION + '  •  AOSP 28–30'); version.setObjectName('subtitle'); foot.addWidget(version); outer.addLayout(foot)
-        self.mode_changed()
+            badge=self.bind(QLabel(),'Демонстрационный режим • команды имитируются'); badge.setStyleSheet('color:#F5CE7E;padding:8px 12px;background:#332D22;border-radius:12px;'); right.addWidget(badge)
+        titles=QVBoxLayout(); titles.setSpacing(4); self.section_title=QLabel(); self.section_title.setObjectName('title'); titles.addWidget(self.section_title); self.section_description=QLabel(); self.section_description.setWordWrap(True); self.section_description.setObjectName('subtitle'); titles.addWidget(self.section_description); right.addLayout(titles)
+        self.stack=AnimatedStack(self); self.pages={}; self.section_items={}; self.section_indices={}; self.group_items=[]
+        factories={'catalog':CatalogPage,'installer':InstallerPage,'keyboards':KeyboardPage,'inspector':InspectorPage,'files':ExplorerPage,'apps':AppsPage,'tweaks':TweaksPage,'terminal':TerminalPage}
+        groups=[('Приложения',['catalog','installer','keyboards']),('Автомобиль',['inspector','files','apps','tweaks']),('Для опытных',['terminal'])]
+        icons={'catalog':'catalog','installer':'download','keyboards':'keyboard','inspector':'search','files':'folder','apps':'apps','tweaks':'sliders','terminal':'terminal'}
+        for group,keys in groups:
+            heading=QListWidgetItem(self.t(group)); heading.setFlags(Qt.ItemFlag.NoItemFlags); heading.setForeground(QColor('#8F9EB1')); heading.setSizeHint(QSize(180,32)); self.sidebar.addItem(heading); self.group_items.append((heading,group))
+            for key in keys:
+                page=factories[key](self); self.pages[key]=page
+                page.layout.setSpacing(16)
+                if hasattr(page,'log'):
+                    page.layout.removeWidget(page.log); page.log.hide()
+                item=QListWidgetItem(ui_icon(icons[key]),self.t(SECTION_NAMES[key])); item.setData(Qt.ItemDataRole.UserRole,key); item.setToolTip(self.t(SECTION_HELP[key])); self.sidebar.addItem(item); self.section_items[key]=item
+                if key in ('files','apps','terminal'): container=page
+                else:
+                    container=QScrollArea(); container.setWidgetResizable(True); container.setFrameShape(QFrame.Shape.NoFrame); container.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); container.setWidget(page)
+                container.setProperty('section',key); self.section_indices[key]=self.stack.addWidget(container)
+        self.sidebar.currentItemChanged.connect(self.section_changed); right.addWidget(self.stack,1)
+        dock=QFrame(); dock.setObjectName('operationDock'); d=QVBoxLayout(dock); d.setContentsMargins(16,12,16,12); d.setSpacing(8)
+        operation=QHBoxLayout(); operation.setSpacing(12); self.operation_label=QLabel(self.t('Готово к работе')); self.operation_label.setObjectName('subtitle'); self.operation_label.setWordWrap(True); operation.addWidget(self.operation_label,1)
+        self.global_progress=QProgressBar(); self.global_progress.setFixedHeight(12); self.global_progress.setTextVisible(False); self.global_progress.setMaximumWidth(240); self.global_progress.hide(); operation.addWidget(self.global_progress)
+        self.cancel_btn=self.button('Отменить задание',self.cancel_operation,icon='stop'); self.cancel_btn.setEnabled(False); operation.addWidget(self.cancel_btn)
+        self.log_disclosure=Disclosure(self.t('Журнал операций'),self); self.log_disclosure.toggle.setIcon(ui_icon('terminal')); self.log_disclosure.toggle.setProperty('help_key',ACTION_HELP['Журнал операций']); self.journal_toggle=self.log_disclosure.toggle
+        operation.addWidget(self.journal_toggle); d.addLayout(operation)
+        self.shared_log=logbox(); self.shared_log.setMinimumHeight(120); self.shared_log.setMaximumHeight(220); self.log_disclosure.body.addWidget(self.shared_log); d.addWidget(self.log_disclosure)
+        self.notice_label=QLabel(); self.notice_label.setObjectName('subtitle'); self.notice_label.setWordWrap(True); self.notice_label.setMaximumHeight(56); d.addWidget(self.notice_label)
+        right.addWidget(dock); self.select_section('catalog'); self.mode_changed(); self.apply_policy()
+
+    def section_changed(self,item,previous=None):
+        key=item.data(Qt.ItemDataRole.UserRole) if item else None
+        if key not in self.section_indices: return
+        self.stack.setCurrentIndex(self.section_indices[key]); self.section_title.setText(self.t(SECTION_NAMES[key])); self.section_description.setText(self.t(SECTION_HELP[key]))
 
     def current_section(self):
         item = self.sidebar.currentItem()
@@ -1202,25 +1602,49 @@ class MainWindow(QMainWindow):
     def apply_policy(self):
         if not hasattr(self,'pages'): return
         for key,page in self.pages.items():
-            enabled = self.allowed(key,False); page.setEnabled(enabled)
+            enabled=self.allowed(key,False); page.setEnabled(enabled)
             page.setToolTip('' if enabled else self.t('Отключено администратором'))
-            self.section_items[key].setForeground(QColor('#E5EBF2' if enabled else '#7C8797'))
+            self.section_items[key].setForeground(QColor(UiTokens.text if enabled else '#8491A3'))
         for widget in self.findChildren(QWidget):
-            key = widget.property('feature')
+            key=widget.property('feature')
             if key:
-                enabled = self.allowed(key,False)
-                if key in ('repair.settings','repair.verity','keyboard.install','keyboard.restore'): enabled = enabled and self.allowed('device.root',False) and self.allowed('device.reboot',False)
-                widget.setEnabled(enabled); widget.setToolTip('' if enabled else self.t('Отключено администратором'))
-        catalog_page = self.pages.get('catalog')
-        if catalog_page: catalog_page.show_details()
+                enabled=self.allowed(key,False)
+                if key in ('repair.settings','repair.verity','keyboard.install','keyboard.restore'): enabled=enabled and self.allowed('device.root',False) and self.allowed('device.reboot',False)
+                if isinstance(widget,VoyahButton): widget.setPolicyEnabled(enabled,self)
+                else:
+                    widget.setEnabled(enabled); update_help(widget,self,'' if enabled else 'Отключено администратором')
+            elif widget.property('help_key'): update_help(widget,self)
+        for action in self.findChildren(QAction):
+            key=action.property('feature')
+            if key:
+                action.setEnabled(self.allowed(key,False) and not self.busy)
+                update_help(action,self,'' if self.allowed(key,False) else 'Отключено администратором')
+        for page in self.pages.values():
+            if hasattr(page,'update_actions'): page.update_actions()
+        for widget in self.findChildren(QWidget):
+            if not widget.property('help_key'): continue
+            feature=widget.property('feature')
+            section=next((key for key,page in self.pages.items() if page.isAncestorOf(widget)),None)
+            reason=''
+            if (feature and not self.allowed(feature,False)) or (section and not self.allowed(section,False)): reason='Отключено администратором'
+            elif not widget.isEnabled():
+                if self.busy: reason='Дождитесь завершения или отмените текущее задание.'
+                elif not self.target and section!='terminal': reason='Сначала подключите устройство.'
+                else: reason='Сначала выберите подходящий объект или заполните необходимые поля.'
+            update_help(widget,self,reason)
+        for button in getattr(self,'nav_buttons',[]):
+            button.setEnabled(bool(self.target) and not self.busy); update_help(button,self,'' if self.target else 'Сначала подключите устройство.')
+        self.root_button.setEnabled(not self.busy and bool(self.target)); self.reboot_button.setEnabled(not self.busy and bool(self.target))
 
-    def resizeEvent(self, event):
+    def resizeEvent(self,event):
         super().resizeEvent(event)
         if not hasattr(self,'sidebar'): return
-        compact = self.width() < 1150; self.sidebar.setFixedWidth(60 if compact else 260)
-        self.device_info.setVisible(not compact)
+        compact=self.width()<1120; self.sidebar_panel.setFixedWidth(72 if compact else 240); self.brand_label.setVisible(not compact); self.sidebar_version.setVisible(not compact)
+        self.sidebar_panel.layout().setContentsMargins(8 if compact else 12,20,8 if compact else 12,16)
+        self.about_button.setText('' if compact else self.t('О приложении')); self.about_button.setFixedWidth(44 if compact else 214)
+        for item,key in self.group_items: item.setText('' if compact else self.t(key)); item.setSizeHint(QSize(40 if compact else 180,8 if compact else 32))
         for key,item in self.section_items.items():
-            symbol = item.data(Qt.ItemDataRole.UserRole + 1); item.setText(symbol if compact else symbol + '  ' + self.t(SECTION_NAMES[key]))
+            item.setText('' if compact else self.t(SECTION_NAMES[key])); item.setSizeHint(QSize(44 if compact else 206,52 if compact or key!='apps' else 68))
 
     def open_admin(self):
         if self.admin_dialog:
@@ -1240,12 +1664,21 @@ class MainWindow(QMainWindow):
         else: self.refresh_devices()
 
     def retranslate(self):
-        for obj, key, method in self.binding: getattr(obj, method)(self.t(key))
-        for key, page in self.pages.items():
-            page.retranslate()
-            item = self.section_items[key]; symbol = item.data(Qt.ItemDataRole.UserRole + 1); item.setText(symbol if self.width()<1150 else symbol + '  ' + self.t(SECTION_NAMES[key])); item.setToolTip(self.t(SECTION_NAMES[key]))
-        self.apply_policy()
-        self.update_status(); self.adb_label.setText('ADB  ·  ' + (self.adb_path or '—'))
+        for obj,key,method in self.binding:
+            getattr(obj,method)(self.t(key))
+            if obj.property('icon_only'): obj.setText('')
+            if obj.property('help_key'): update_help(obj,self)
+        self.connection_toggle.setText('')
+        for key,page in self.pages.items():
+            page.retranslate(); self.section_items[key].setToolTip(self.t(SECTION_HELP[key]))
+        self.journal_toggle.setText(self.t('Журнал операций'))
+        self.section_changed(self.sidebar.currentItem())
+        compact=self.width()<1120
+        for key,item in self.section_items.items():
+            item.setText('' if compact else self.t(SECTION_NAMES[key])); item.setSizeHint(QSize(44 if compact else 206,52 if compact or key!='apps' else 68))
+        for item,key in self.group_items: item.setText('' if compact else self.t(key))
+        self.about_button.setText('' if compact else self.t('О приложении'))
+        self.apply_policy(); self.update_status(); self.adb_label.setText('ADB  ·  '+(self.adb_path or '—'))
 
     def change_language(self):
         self.lang = self.language.currentData(); self.settings.setValue('language', self.lang); self.retranslate()
@@ -1284,13 +1717,14 @@ class MainWindow(QMainWindow):
         if hasattr(self,'pages'): self.pages['terminal'].stop_streams()
         self.operation_label.setText(name); self.global_progress.setRange(0, 0); self.global_progress.show(); self.cancel_btn.setEnabled(True)
         for w in (self.mode, self.device_combo, self.connect_btn): w.setEnabled(False)
+        self.apply_policy()
         return True
 
     def end(self, success=True):
         self.busy = False; self.active_job = None; self.global_progress.hide(); self.cancel_btn.setEnabled(False)
         for w in (self.mode, self.device_combo, self.connect_btn): w.setEnabled(True)
         self.catalog.flush(); self.apply_policy()
-        self.operation_label.setText(''); self.notice(self.t('Отменено') if self.cancel_requested else self.t('Готово: {name}' if success else 'Ошибка: {name}', name=self.operation_name))
+        self.operation_label.setText(self.t('Отменено') if self.cancel_requested else self.t('Готово к работе')); self.notice(self.t('Отменено') if self.cancel_requested else self.t('Готово: {name}' if success else 'Ошибка: {name}', name=self.operation_name))
 
     def cancel_operation(self):
         self.cancel_requested = True
@@ -1401,6 +1835,8 @@ class MainWindow(QMainWindow):
             if hasattr(page, 'stop_streams'): page.stop_streams()
         self.target = target; self.privilege = 'shell'; self.profile = Profile(); self.root_button.setText(self.t('Расширенный режим'))
         if target: self.settings.setValue('last_serial', target.serial)
+        self.pages['catalog'].refresh(); self.pages['keyboards'].describe(); self.pages['tweaks'].update_profile(); self.apply_policy()
+        self.apply_policy()
 
     def update_status(self, state=''):
         key, color = ('Подключено', '#44D7A0') if self.target else ('Отключено', '#EF707B')
@@ -1408,7 +1844,7 @@ class MainWindow(QMainWindow):
             key = 'Не авторизовано — подтвердите RSA на ГУ' if state == 'unauthorized' else 'Устройство не отвечает'; color = '#F4C66B'
         self.status_dot.setStyleSheet(f'color:{color};font-size:18pt;')
         suffix = ('  ' + ('USB [-d]' if self.target.use_d else f'{self.target.mode.upper()} [-s {self.target.serial}]')) if self.target else ''
-        self.connection_status.setText(self.t(key) + suffix); self.connection_status.setToolTip(self.t(key) + suffix)
+        self.connection_status.setText(self.t(key)); self.vehicle_label.setText(self.target.serial if self.target else self.t('Ваш автомобиль'));  self.connection_status.setToolTip(self.t(key) + suffix)
         self.adb_label.setText('ADB  ·  ' + (self.adb_path or '—'))
 
     def choose_adb(self):
@@ -1505,7 +1941,7 @@ class MainWindow(QMainWindow):
                 self.profile = p
                 self.device_info.setText(f'{p.model}  /  Android {p.release}  /  API {p.api}')
                 self.device_info.setToolTip('Model: ' + p.model_code + '\nVIN: ' + (p.vin or '—') + '\nUID: ' + str(p.uid))
-                self.pages['tweaks'].update_profile(); return
+                self.pages['tweaks'].update_profile(); self.pages['catalog'].refresh(); self.pages['keyboards'].describe(); self.apply_policy(); return
             key, args = queries[index]
             def complete(r):
                 data[key] = r.text; query(index + 1)
@@ -1637,149 +2073,489 @@ class MainWindow(QMainWindow):
         self.settings.sync(); event.accept()
 
 class InspectorPage(Page):
+    """Four task-oriented inspection views; device commands remain asynchronous."""
+    SECTION_KEYS = ('Экраны', 'Кнопки руля', 'Наблюдение', 'Сведения о приложении')
+    CAPTURE_KEYS = ('Открытие приложений', 'Нажатия и голос', 'Фоновые действия', 'Вся запись')
+    DUMP_KEYS = ('Экраны приложения', 'Получаемые события', 'Фоновые действия', 'Полные сведения')
+
+    class CurrentStack(QWidget):
+        """Hidden details must not force compact display cards to their full height."""
+        def __init__(self):
+            super().__init__(); self.pages = []; self.index = 0
+            self.body = QVBoxLayout(self); self.body.setContentsMargins(0, 0, 0, 0); self.body.setSpacing(0); self.body.setAlignment(Qt.AlignmentFlag.AlignTop)
+        def addWidget(self, widget):
+            index = len(self.pages); self.pages.append(widget); self.body.addWidget(widget); widget.setVisible(index == self.index); return index
+        def currentWidget(self): return self.pages[self.index] if self.pages else None
+        def currentIndex(self): return self.index
+        def widget(self, index): return self.pages[index]
+        def setCurrentIndex(self, index):
+            self.index = index
+            for number, widget in enumerate(self.pages): widget.setVisible(number == index)
+            self.body.invalidate(); self.updateGeometry()
+
     def __init__(self, main):
-        super().__init__(main); self.streams = {}; self.stream_buffers = {'logcat':'', 'getevent':''}; self.full_capture = ''; self.full_dump = ''
-        card = self.card('Что сейчас на экранах?'); self.row(card, self.button('Сканировать экраны', self.scan, True), 1)
-        self.screen_grid = QGridLayout(); card.addLayout(self.screen_grid); self.fields = {}; self.display_tags = {}; self.last_screens = {}
-        for column, display in enumerate((0, 1, 2)):
-            panel = QWidget(); panel.setStyleSheet('background:transparent;'); panel_layout = QVBoxLayout(panel); panel_layout.setContentsMargins(0, 0, 8, 0)
-            tag = QLabel(f'DISPLAY {display}'); tag.setObjectName('eyebrow'); panel_layout.addWidget(tag); self.display_tags[display] = tag
-            for i, key in enumerate(('package', 'activity', 'component')):
-                panel_layout.addWidget(QLabel(('Package', 'Activity', 'Component')[i]))
-                edit = QLineEdit(); edit.setReadOnly(True); edit.setPlaceholderText('—'); self.fields[display, key] = edit
-                row = QHBoxLayout(); row.addWidget(edit, 1)
-                button = self.button('Копировать', lambda checked=False, e=edit: QApplication.clipboard().setText(e.text())); button.setMaximumWidth(104); row.addWidget(button); panel_layout.addLayout(row)
-            self.screen_grid.addWidget(panel, 0, column); self.screen_grid.setColumnStretch(column, 1)
-        card = self.card('Перехват кнопки руля'); self.capture_progress = QProgressBar(); self.capture_progress.setRange(0, 60); self.capture_progress.setValue(0)
-        self.capture_btn = self.button('Перехватить 6 секунд', self.capture, True)
-        self.row(card, self.capture_btn, self.capture_progress, self.button('Сохранить и открыть в Блокноте', lambda: self.save_text(self.full_capture, 'voyah-capture.txt', True)))
-        self.capture_tabs = QTabWidget(); self.capture_views = [logbox() for _ in range(4)]
-        for text, view in zip(('Запуски экранов', 'Руль / MCU / ассистенты', 'Сервисы / Broadcast', 'Полный лог'), self.capture_views): self.capture_tabs.addTab(view, self.t(text))
-        self.capture_tabs.setMinimumHeight(200); card.addWidget(self.capture_tabs)
-        self.capture_timer = QTimer(self); self.capture_timer.setInterval(100); self.capture_timer.timeout.connect(self.capture_tick); self.capture_started = 0
-        card = self.card('Live-мониторинг'); self.live_filter = self.edit('Фильтр: слова через запятую'); self.live_filter.textChanged.connect(self.refilter)
-        self.row(card, self.live_filter, self.button('Сохранить', lambda: self.save_text('\n'.join(self.stream_buffers.values()), 'voyah-live.txt')))
-        self.live_views = {}; self.live_buttons = {}
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        for name in ('logcat', 'getevent'):
-            panel = QWidget(); layout = QVBoxLayout(panel); layout.setContentsMargins(0, 0, 0, 0)
-            row = QHBoxLayout(); label = QLabel(name.upper()); label.setObjectName('eyebrow'); row.addWidget(label)
-            button = self.button('Старт', lambda checked=False, n=name: self.toggle_stream(n)); row.addWidget(button); self.live_buttons[name] = button
-            layout.addLayout(row); view = logbox(); view.setMinimumHeight(200); self.live_views[name] = view; layout.addWidget(view); splitter.addWidget(panel)
-        card.addWidget(splitter)
-        card = self.card('Пакеты и интенты'); self.package_search = self.edit('Поиск пакета'); self.package_combo = QComboBox(); self.package_combo.setEditable(True)
-        self.row(card, self.package_search, self.button('Найти', self.search_packages), self.package_combo, self.button('Дамп пакета', self.dump_package, True), self.button('Сохранить', lambda: self.save_text(self.full_dump, 'voyah-package.txt')))
-        self.dump_view = logbox(); self.dump_view.setMinimumHeight(240); card.addWidget(self.dump_view); self.layout.addStretch()
-        cards = []
-        while self.layout.count():
-            item = self.layout.takeAt(0)
-            if item.widget(): cards.append(item.widget())
-        self.sections = QTabWidget()
-        for key, widget in zip(('Экраны','Кнопки руля','Live','Интенты'), cards): self.sections.addTab(widget, self.t(key))
-        self.layout.addWidget(self.sections)
+        super().__init__(main)
+        self.streams = {}; self.stream_buffers = {'logcat': '', 'getevent': ''}
+        self.live_pending = {'logcat': '', 'getevent': ''}; self.live_paused = {'logcat': False, 'getevent': False}
+        self.live_states = {'logcat': 'stopped', 'getevent': 'stopped'}
+        self.full_capture = ''; self.full_dump = ''; self.last_screens = {}
+        self.empty_keys = {}
+        self.screen_time = ''; self.capture_state = 'idle'; self.capture_counts = [0, 0, 0, 0]
+        self.capture_started = 0; self.capture_target = None; self.package_found = None; self.package_state = 'idle'; self.dump_generation = 0
+        self.sections = QTabWidget(); self.sections.setDocumentMode(True); self.sections.setObjectName('inspectorSections')
+        self.sections.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.layout.addWidget(self.sections, 1)
+        self._build_screens(); self._build_capture(); self._build_live(); self._build_package()
+        for i, name in enumerate(('monitor', 'steering', 'pulse', 'apps')):
+            self.sections.setTabIcon(i, ui_icon(name))
+        self.capture_timer = QTimer(self); self.capture_timer.setInterval(100); self.capture_timer.timeout.connect(self.capture_tick)
+        self.live_timer = QTimer(self); self.live_timer.setInterval(100); self.live_timer.timeout.connect(self._flush_live)
+        self.retranslate()
+
+    def _section(self, key):
+        page = QWidget(); page.setObjectName('inspectorScenario')
+        body = QVBoxLayout(page); body.setContentsMargins(0, 16, 0, 0); body.setSpacing(16)
+        self.sections.addTab(page, self.t(key))
+        return body
+
+    def _card(self, layout, title, description=''):
+        panel = QFrame(); panel.setObjectName('card'); body = QVBoxLayout(panel)
+        body.setContentsMargins(20, 18, 20, 18); body.setSpacing(12)
+        if title: body.addWidget(self.label(title, 'section'))
+        if description: body.addWidget(self.hint(description))
+        layout.addWidget(panel)
+        return body
+
+    def _empty(self, layout, title, description, icon='info'):
+        widget = EmptyState(self.t(title), self.t(description), icon)
+        self.bind(widget.title, title); self.bind(widget.description, description)
+        layout.addWidget(widget)
+        self.empty_keys[widget] = (title, description)
+        return widget
+
+    def _set_empty(self, widget, title, description):
+        self.empty_keys[widget] = (title, description)
+        widget.title.setText(self.t(title)); widget.description.setText(self.t(description))
+
+    def _copy_button(self, edit):
+        button = QToolButton(); button.setObjectName('iconButton'); button.setIcon(ui_icon('copy'))
+        button.setIconSize(QSize(18, 18)); button.setFixedSize(36, 36)
+        button.setStyleSheet('QToolButton#iconButton { padding:0; }')
+        self.bind(button, 'Копировать эту запись', 'setToolTip')
+        self.bind(button, 'Копировать эту запись', 'setAccessibleName')
+        button.clicked.connect(lambda checked=False, e=edit, b=button: self._copy(e, b))
+        return button
+
+    def _copy(self, edit, button):
+        if not edit.text(): return
+        QApplication.clipboard().setText(edit.text()); button.setToolTip(self.t('Скопировано'))
+        self.main.notice(self.t('Скопировано'))
+        timer=QTimer(button); timer.setSingleShot(True)
+        timer.timeout.connect(lambda: button.setToolTip(self.t('Копировать эту запись'))); timer.start(1200)
+
+    def _screen_field(self, layout, display, key, label, help_key):
+        field_label = self.label(label, 'fieldLabel'); layout.addWidget(field_label)
+        row = QHBoxLayout(); row.setSpacing(8)
+        edit = QLineEdit(); edit.setReadOnly(True); edit.setPlaceholderText('—'); edit.setMinimumWidth(0)
+        edit.setProperty('technical',True)
+        edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        field_label.setBuddy(edit)
+        self.bind(edit, help_key, 'setToolTip'); self.fields[display, key] = edit
+        row.addWidget(edit, 1); copy_btn = self._copy_button(edit); copy_btn.setEnabled(False)
+        self.screen_copy_buttons[display, key] = copy_btn; row.addWidget(copy_btn)
+        layout.addLayout(row)
+
+    def _build_screens(self):
+        layout = self._section('Экраны')
+        card = self._card(layout, 'Что сейчас открыто?', 'Узнайте, какое приложение сейчас видно на каждом экране автомобиля.')
+        row = QHBoxLayout(); row.setSpacing(12)
+        self.scan_btn = self.button('Обновить экраны', self.scan, True, icon='refresh', help_key='Показывает приложения, которые сейчас открыты на экранах автомобиля.')
+        row.addWidget(self.scan_btn); row.addStretch(1)
+        self.screen_updated = QLabel(); self.screen_updated.setObjectName('muted'); row.addWidget(self.screen_updated)
+        card.addLayout(row)
+        self.screen_grid = ResponsiveGrid(min_card_width=285, max_columns=3)
+        card.addWidget(self.screen_grid)
+        self.fields = {}; self.display_tags = {}; self.screen_status = {}; self.screen_stacks = {}; self.screen_copy_buttons = {}; self.screen_empty = {}; self.screen_names = {}; self.screen_times = {}; self.screen_disclosures = {}
+        roles = ('Приборная панель', 'Центральный экран', 'Экран пассажира')
+        for display, role in enumerate(roles):
+            panel = QFrame(); panel.setObjectName('innerCard'); body = QVBoxLayout(panel); body.setContentsMargins(16, 16, 16, 16); body.setSpacing(10); body.setAlignment(Qt.AlignmentFlag.AlignTop)
+            header = QHBoxLayout(); icon = QLabel(); icon.setPixmap(ui_icon('gauge' if display == 0 else 'monitor').pixmap(22, 22))
+            header.addWidget(icon); header.addWidget(self.label(role, 'section'), 1); body.addLayout(header)
+            tag = QLabel(); tag.setObjectName('eyebrow'); self.display_tags[display] = tag
+            meta = QHBoxLayout(); meta.addWidget(tag); meta.addStretch(1)
+            updated = QLabel(); updated.setObjectName('muted'); self.screen_times[display] = updated; meta.addWidget(updated); body.addLayout(meta)
+            status = QLabel(); status.setObjectName('muted'); status.setWordWrap(True); self.screen_status[display] = status; body.addWidget(status)
+            stack = self.CurrentStack(); stack.setObjectName('screenStack'); stack.setStyleSheet('QWidget#screenStack, QWidget#screenValues, QWidget#screenEmptyPage { background:transparent; }')
+            stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            empty_page = QWidget(); empty_page.setObjectName('screenEmptyPage'); empty_layout = QVBoxLayout(empty_page); empty_layout.setContentsMargins(0, 0, 0, 0)
+            self.screen_empty[display] = self._empty(empty_layout, 'Пока нет данных', 'Подключите автомобиль и нажмите «Обновить экраны».', 'monitor'); stack.addWidget(empty_page)
+            values = QWidget(); values.setObjectName('screenValues'); values_layout = QVBoxLayout(values); values_layout.setContentsMargins(0, 0, 0, 0); values_layout.setSpacing(8); values_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+            name = QLabel(); name.setObjectName('fieldLabel'); name.setWordWrap(True); name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            self.screen_names[display] = name; values_layout.addWidget(name)
+            details = self.disclosure('Подробности', values_layout, expanded=False); self.screen_disclosures[display] = details
+            self._screen_field(details.body, display, 'package', 'Приложение', 'Адрес приложения в системе. Его можно скопировать для настройки или диагностики.')
+            self._screen_field(details.body, display, 'activity', 'Открытый экран приложения', 'Название той части приложения, которая сейчас видна.')
+            self._screen_field(details.body, display, 'component', 'Приложение и экран', 'Полная запись приложения и открытого экрана.')
+            stack.addWidget(values); body.addWidget(stack); self.screen_stacks[display] = stack
+            body.addStretch(1); self.screen_grid.addWidget(panel)
+        layout.addStretch(1)
+
+    def _build_capture(self):
+        layout = self._section('Кнопки руля')
+        card = self._card(layout, 'Что делает кнопка руля?', 'Начните запись, нажмите нужную кнопку в автомобиле и дождитесь результата.')
+        steps=FlowLayout()
+        for step in ('1. Начните запись', '2. Нажмите кнопку руля', '3. Посмотрите результат'):
+            label=self.label(step,'badge'); steps.addWidget(label)
+        card.addLayout(steps)
+        self.countdown=self.label('6 секунд','countdown'); self.bind(self.countdown,'Время записи','setAccessibleName'); card.addWidget(self.countdown)
+        self.capture_state_label = QLabel(); self.capture_state_label.setObjectName('section'); self.capture_state_label.setWordWrap(True); card.addWidget(self.capture_state_label)
+        self.capture_progress = QProgressBar(); self.capture_progress.setRange(0, 60); self.capture_progress.setValue(0); self.capture_progress.setTextVisible(False)
+        self.capture_progress.setFixedHeight(8); card.addWidget(self.capture_progress)
+        actions = FlowLayout(); actions.setSpacing(10)
+        self.capture_btn = self.button('Начать запись на 6 секунд', self.capture, True, icon='steering', help_key='Записывает события в течение шести секунд. Сразу после начала нажмите нужную кнопку на руле.')
+        self.capture_cancel_btn = self.button('Отменить', self.main.cancel_operation, icon='stop', help_key='Останавливает текущую запись. Можно сразу начать новую.')
+        self.capture_cancel_btn.setEnabled(False)
+        actions.addWidget(self.capture_btn); actions.addWidget(self.capture_cancel_btn)
+        self.capture_save_btn = self.button('Сохранить запись', lambda: self.save_text(self.full_capture, 'voyah-capture.txt'), icon='save', help_key='Сохраняет все полученные сообщения, включая скрытые в других группах.')
+        self.capture_open_btn = self.button('Открыть в Блокноте', lambda: self.save_text(self.full_capture, 'voyah-capture.txt', True), help_key='Сохраняет запись на компьютер и открывает её в Блокноте.')
+        self.capture_save_btn.setEnabled(False); self.capture_open_btn.setEnabled(False)
+        actions.addWidget(self.capture_save_btn); actions.addWidget(self.capture_open_btn); card.addLayout(actions)
+        self.capture_summary = QLabel(); self.capture_summary.setObjectName('muted'); self.capture_summary.setWordWrap(True); card.addWidget(self.capture_summary)
+        self.capture_tabs = QTabWidget(); self.capture_tabs.setDocumentMode(True); self.capture_tabs.setObjectName('resultTabs')
+        self.capture_views = [logbox() for _ in range(4)]; self.capture_empty = []; self.capture_stacks = []
+        descriptions = ('Какие приложения и экраны открылись во время записи.', 'Сообщения о кнопках руля и голосовых командах.', 'Действия, которые автомобиль выполняет без открытия нового окна.', 'Все сообщения, полученные во время записи.')
+        for key, description, view in zip(self.CAPTURE_KEYS, descriptions, self.capture_views):
+            page = QWidget(); body = QVBoxLayout(page); body.setContentsMargins(0, 12, 0, 0); body.setSpacing(10)
+            body.addWidget(self.hint(description)); stack = QStackedWidget(); stack.setMinimumHeight(240)
+            empty_page = QWidget(); empty_body = QVBoxLayout(empty_page); empty_body.setContentsMargins(0, 0, 0, 0)
+            empty = self._empty(empty_body, 'Здесь появится результат', 'Нажмите «Начать запись» и затем нужную кнопку на руле.', 'steering')
+            stack.addWidget(empty_page); stack.addWidget(view); body.addWidget(stack, 1)
+            self.capture_empty.append(empty); self.capture_stacks.append(stack); self.capture_tabs.addTab(page, self.t(key))
+        card.addWidget(self.capture_tabs, 1)
+
+    def _build_live(self):
+        layout = self._section('Наблюдение')
+        card = self._card(layout, 'Наблюдение в реальном времени', 'Запустите нужный вид наблюдения и выполните действие в автомобиле.')
+        filters = QHBoxLayout(); filters.setSpacing(10)
+        self.live_filter = self.edit('Показать сообщения с этими словами, например: музыка, голос')
+        self.bind(self.live_filter, 'Введите одно или несколько слов через запятую. Остальные сообщения будут скрыты, но сохранятся в записи.', 'setToolTip')
+        self.live_filter.textChanged.connect(self.refilter); filters.addWidget(self.live_filter, 1)
+        self.live_save_btn = self.button('Сохранить наблюдение', lambda: self.save_text('\n'.join(self.stream_buffers.values()), 'voyah-live.txt'), icon='save', help_key='Сохраняет сообщения из обоих видов наблюдения, включая скрытые фильтром.')
+        self.live_save_btn.setEnabled(False); filters.addWidget(self.live_save_btn); card.addLayout(filters)
+        self.live_views = {}; self.live_buttons = {}; self.live_pause_buttons = {}; self.live_status = {}; self.live_stacks = {}; self.live_empty = {}
+        grid = ResponsiveGrid(min_card_width=370, max_columns=2); card.addWidget(grid)
+        for name, key, description in (('logcat', 'События приложений', 'Показывает, что делают приложения во время вашей работы с экраном.'), ('getevent', 'Нажатия кнопок', 'Здесь видны только те нажатия, которые автомобиль передаёт системе.')):
+            panel = QFrame(); panel.setObjectName('innerCard'); body = QVBoxLayout(panel); body.setContentsMargins(16, 16, 16, 16); body.setSpacing(10)
+            row = QHBoxLayout(); row.addWidget(self.label(key, 'section'), 1)
+            state = QLabel(); state.setObjectName('statusChip'); self.live_status[name] = state; row.addWidget(state); body.addLayout(row)
+            body.addWidget(self.hint(description))
+            actions = QHBoxLayout(); actions.setSpacing(8)
+            button = self.button('Начать', lambda checked=False, n=name: self.toggle_stream(n), True, icon='play', help_key='Начинает получать новые сообщения. Второй вид наблюдения работает независимо.')
+            pause = self.button('Пауза прокрутки', lambda checked=False, n=name: self.toggle_pause(n), icon='pulse', help_key='Оставляет нужные строки на экране. Запись продолжает работать.')
+            pause.setEnabled(False); self.live_buttons[name] = button; self.live_pause_buttons[name] = pause
+            actions.addWidget(button); actions.addWidget(pause); actions.addStretch(1); body.addLayout(actions)
+            stack = QStackedWidget(); stack.setMinimumHeight(250)
+            empty_page = QWidget(); empty_body = QVBoxLayout(empty_page); empty_body.setContentsMargins(0, 0, 0, 0)
+            self.live_empty[name] = self._empty(empty_body, 'Наблюдение ещё не началось', 'Нажмите «Начать», затем выполните нужное действие в автомобиле.', 'pulse')
+            view = logbox(); stack.addWidget(empty_page); stack.addWidget(view); body.addWidget(stack, 1)
+            self.live_views[name] = view; self.live_stacks[name] = stack; grid.addWidget(panel)
+        layout.addStretch(1)
+
+    def _build_package(self):
+        layout = self._section('Сведения о приложении')
+        card = self._card(layout, 'Какие действия доступны приложению?', 'Найдите установленное приложение или укажите его адрес, затем получите сведения.')
+        search_row = QHBoxLayout(); search_row.setSpacing(10)
+        self.package_search = self.edit('Найти приложение по части адреса'); self.package_search.returnPressed.connect(self.search_packages)
+        self.bind(self.package_search, 'Введите часть адреса приложения. Программа найдёт совпадения среди установленных приложений.', 'setToolTip')
+        self.package_find_btn = self.button('Найти', self.search_packages, icon='search')
+        search_row.addWidget(self.package_search, 1); search_row.addWidget(self.package_find_btn)
+        card.addLayout(search_row)
+        self.package_search_status = QLabel(); self.package_search_status.setObjectName('muted'); self.package_search_status.setWordWrap(True); card.addWidget(self.package_search_status)
+        card.addWidget(self.label('Выберите приложение или укажите его адрес', 'fieldLabel'))
+        select_row = QHBoxLayout(); select_row.setSpacing(10)
+        self.package_combo = QComboBox(); self.package_combo.setEditable(True); self.package_combo.setMinimumWidth(0)
+        self.package_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        if self.package_combo.lineEdit(): self.bind(self.package_combo.lineEdit(), 'Например: com.voyah.music', 'setPlaceholderText')
+        select_row.addWidget(self.package_combo, 1)
+        self.dump_btn = self.button('Получить сведения', self.dump_package, True, icon='apps', help_key='Показывает доступные экраны приложения и действия, на которые оно реагирует.')
+        select_row.addWidget(self.dump_btn)
+        self.dump_save_btn = self.button('Сохранить', lambda: self.save_text(self.full_dump, 'voyah-package.txt'), icon='save', help_key='Сохраняет все сведения о выбранном приложении на компьютер.')
+        self.dump_save_btn.setEnabled(False); select_row.addWidget(self.dump_save_btn); card.addLayout(select_row)
+        self.package_combo.currentTextChanged.connect(self.update_actions)
+        self.dump_status = QLabel(); self.dump_status.setObjectName('muted'); self.dump_status.setWordWrap(True); card.addWidget(self.dump_status)
+        self.dump_tabs = QTabWidget(); self.dump_tabs.setDocumentMode(True); self.dump_tabs.setObjectName('resultTabs')
+        self.dump_views = [logbox() for _ in range(4)]; self.dump_view = self.dump_views[3]
+        self.dump_empty = []; self.dump_stacks = []
+        descriptions = ('Экраны, которые могут открываться внутри приложения.', 'События, после которых приложение может выполнять действия.', 'Действия приложения, которые выполняются без открытия окна.', 'Все сведения, полученные от автомобиля. Их можно сохранить для подробного разбора.')
+        for key, description, view in zip(self.DUMP_KEYS, descriptions, self.dump_views):
+            page = QWidget(); body = QVBoxLayout(page); body.setContentsMargins(0, 12, 0, 0); body.setSpacing(10); body.addWidget(self.hint(description))
+            stack = QStackedWidget(); stack.setMinimumHeight(240)
+            empty_page = QWidget(); empty_body = QVBoxLayout(empty_page); empty_body.setContentsMargins(0, 0, 0, 0)
+            self.dump_empty.append(self._empty(empty_body, 'Выберите приложение', 'Найдите приложение выше и нажмите «Получить сведения».', 'apps'))
+            stack.addWidget(empty_page); stack.addWidget(view); body.addWidget(stack, 1); self.dump_stacks.append(stack); self.dump_tabs.addTab(page, self.t(key))
+        card.addWidget(self.dump_tabs, 1)
 
     def retranslate(self):
         super().retranslate()
-        for i, text in enumerate(('Запуски экранов', 'Руль / MCU / ассистенты', 'Сервисы / Broadcast', 'Полный лог')): self.capture_tabs.setTabText(i, self.t(text))
-        for i,key in enumerate(('Экраны','Кнопки руля','Live','Интенты')): self.sections.setTabText(i,self.t(key))
-        for name, button in self.live_buttons.items(): button.setText(self.t('Стоп' if name in self.streams else 'Старт'))
+        for widget, (title, description) in self.empty_keys.items():
+            widget.title.setText(self.t(title)); widget.description.setText(self.t(description))
+        for i, key in enumerate(self.SECTION_KEYS): self.sections.setTabText(i, self.t(key))
+        self._screen_labels(); self._capture_labels(); self._live_labels(); self._package_labels()
+        for i, key in enumerate(self.DUMP_KEYS): self.dump_tabs.setTabText(i, self.t(key))
+        self.update_actions()
+
+    def update_actions(self):
+        if not hasattr(self, 'dump_save_btn'): return
+        allowed = self.main.allowed('inspector', False)
+        ready = allowed and bool(self.main.target) and not self.main.busy
+        active = self.capture_state in ('clearing', 'recording', 'reading', 'processing')
+        self.scan_btn.setEnabled(ready); self.capture_btn.setEnabled(ready and not active)
+        # A running operation remains cancellable even while other actions are disabled.
+        self.capture_cancel_btn.setEnabled(active and self.main.busy)
+        self.package_find_btn.setEnabled(ready); self.package_search.setEnabled(ready)
+        self.package_combo.setEnabled(ready); self.dump_btn.setEnabled(ready and bool(PACKAGE_RE.fullmatch(self.package_combo.currentText().strip())))
+        self.capture_save_btn.setEnabled(allowed and bool(self.full_capture)); self.capture_open_btn.setEnabled(allowed and bool(self.full_capture))
+        self.dump_save_btn.setEnabled(allowed and bool(self.full_dump)); self.live_save_btn.setEnabled(allowed and any(self.stream_buffers.values()))
+        for name, button in self.live_buttons.items():
+            button.setEnabled(allowed and (name in self.streams or ready))
+            self.live_pause_buttons[name].setEnabled(allowed and (name in self.streams or bool(self.stream_buffers[name])))
+        for (display, key), button in self.screen_copy_buttons.items(): button.setEnabled(allowed and bool(self.fields[display, key].text()))
+
+    def _screen_labels(self):
+        ids = [self.main.display_map[role] for role in ('cluster', 'center', 'passenger')]
+        for display, label in self.display_tags.items():
+            label.setText(self.t('Экран {number}', number=ids[display]))
+            found = bool(self.last_screens.get(ids[display], {}).get('component'))
+            self.screen_status[display].setText(self.t('На экране открыто приложение' if found else 'Ожидает обновления' if not self.screen_time else 'Автомобиль не сообщил, что открыто на этом экране.'))
+            info = self.last_screens.get(ids[display], {})
+            self.screen_names[display].setText(info.get('label') or info.get('name') or info.get('package', ''))
+            self.screen_names[display].setToolTip(self.screen_names[display].text())
+            self.screen_times[display].setText(self.screen_time or '—')
+        self.screen_updated.setText(self.t('Обновлено в {time}', time=self.screen_time) if self.screen_time else self.t('Ещё не обновлялось'))
+
+    def _capture_labels(self):
+        remaining = max(0, 6 - int(time.monotonic() - self.capture_started)) if self.capture_state == 'recording' else 6
+        self.countdown.setText(self.t('{seconds} с',seconds=remaining) if self.capture_state=='recording' else self.t('6 секунд'))
+        messages = {'idle': 'Готово к записи', 'clearing': 'Подготавливаем запись…', 'recording': 'Нажмите кнопку на руле · осталось {seconds} с', 'reading': 'Получаем записанные сообщения…', 'processing': 'Группируем найденные сообщения…', 'done': 'Запись завершена', 'cancelled': 'Запись отменена', 'error': 'Не удалось завершить запись'}
+        self.capture_state_label.setText(self.t(messages.get(self.capture_state, 'Готово к записи'), seconds=remaining))
+        active = self.capture_state in ('clearing', 'recording', 'reading', 'processing')
+        self.capture_btn.setText(self.t('Записать ещё раз' if self.capture_state in ('done', 'cancelled', 'error') else 'Начать запись на 6 секунд'))
+        self.capture_summary.setText(self.t('Обработано сообщений: {count}. Одно нажатие может создавать несколько сообщений.', count=self.capture_counts[3]) if self.capture_state == 'done' else '')
+        self.capture_summary.setVisible(self.capture_state == 'done')
+        for i, key in enumerate(self.CAPTURE_KEYS):
+            self.capture_tabs.setTabText(i, self.t(key) + (f' · {self.capture_counts[i]}' if self.capture_state == 'done' else ''))
+        self.update_actions()
+
+    def _live_labels(self):
+        for name, button in self.live_buttons.items():
+            running = name in self.streams; button.setText(self.t('Остановить' if running else 'Начать')); button.setIcon(ui_icon('stop' if running else 'play'))
+            self.live_pause_buttons[name].setText(self.t('Продолжить прокрутку' if self.live_paused[name] else 'Пауза прокрутки'))
+            self.live_pause_buttons[name].setEnabled(running or bool(self.stream_buffers[name]))
+            state = 'Запись идёт · просмотр на паузе' if running and self.live_paused[name] else 'Наблюдение идёт' if running else 'Нет доступа' if self.live_states[name] == 'denied' else 'Наблюдение прервано' if self.live_states[name] == 'error' else 'Остановлено'
+            self.live_status[name].setText(self.t(state)); self.live_status[name].setProperty('active', running)
+        self.live_save_btn.setEnabled(any(self.stream_buffers.values()))
+        self.update_actions()
+
+    def _package_labels(self):
+        self.package_search_status.setText(self.t('Найдено приложений: {count}', count=self.package_found) if self.package_found is not None else self.t('Можно искать приложение или сразу указать его адрес.'))
+        self.package_search_status.setVisible(self.package_found is not None)
+        messages = {'idle': 'Сведения ещё не запрошены', 'loading': 'Получаем сведения о приложении…', 'done': 'Сведения получены', 'error': 'Не удалось получить сведения'}
+        self.dump_status.setText(self.t(messages[self.package_state])); self.dump_save_btn.setEnabled(bool(self.full_dump))
+        self.dump_status.setVisible(self.package_state != 'idle')
+        self.update_actions()
 
     @feature_required('inspector')
     def scan(self):
         if not self.main.ready(): return
-        target = self.main.target
+        target = self.main.target; self.scan_btn.setEnabled(False); self.screen_updated.setText(self.t('Обновляем экраны…'))
         def done(ok, results):
-            if not ok: return
+            self.scan_btn.setEnabled(self.main.allowed('inspector', False))
+            if not ok: self._screen_labels(); return
             window, activity = results[0].text, results[1].text
             self.main.background(lambda: parse_screens(window, activity), lambda screens, err: self.show_screens(screens or {}) if target == self.main.target else None)
-        self.main.sequence(self.t('Сканировать экраны'), [Step(['dumpsys', 'window']), Step(['dumpsys', 'activity', 'activities'])], done)
+        self.main.sequence(self.t('Обновить экраны'), [Step(['dumpsys', 'window']), Step(['dumpsys', 'activity', 'activities'])], done)
 
     def show_screens(self, screens):
-        self.last_screens = screens
+        self.last_screens = screens; self.screen_time = time.strftime('%H:%M:%S')
         ids = [self.main.display_map[role] for role in ('cluster', 'center', 'passenger')]
-        for display, label in self.display_tags.items(): label.setText(f'DISPLAY {ids[display]}')
-        for (display, key), edit in self.fields.items(): edit.setText(screens.get(ids[display], {}).get(key, ''))
+        for (display, key), edit in self.fields.items():
+            edit.setText(screens.get(ids[display], {}).get(key, '')); edit.setCursorPosition(0)
+            self.screen_copy_buttons[display, key].setEnabled(bool(edit.text()))
+        for display, stack in self.screen_stacks.items():
+            found = bool(screens.get(ids[display], {}).get('component')); stack.setCurrentIndex(1 if found else 0)
+            if not found: self._set_empty(self.screen_empty[display], 'Нет открытого приложения', 'Автомобиль не сообщил, что открыто на этом экране. Можно обновить данные ещё раз.')
+        self._screen_labels()
+        self.update_actions()
+
+    def _set_capture_state(self, state):
+        if state in ('cancelled', 'error'): self.capture_progress.setValue(0)
+        self.capture_state = state; self._capture_labels()
 
     @feature_required('inspector')
     def capture(self):
         if not self.main.ready() or not self.main.begin(self.t('Перехват кнопки руля')): return
-        self.capture_target = self.main.target; self.capture_btn.setEnabled(False)
+        self.capture_target = self.main.target; self.full_capture = ''; self.capture_counts = [0, 0, 0, 0]
+        self.capture_progress.setValue(0); self._set_capture_state('clearing')
+        for view, stack in zip(self.capture_views, self.capture_stacks): view.clear(); stack.setCurrentIndex(0)
+        for empty in self.capture_empty: self._set_empty(empty, 'Запись начинается', 'Дождитесь начала отсчёта и нажмите нужную кнопку на руле.')
         def cleared(result):
             if not result.ok:
-                self.capture_btn.setEnabled(True); self.main.end(False); self.main.error(self.t(explain_error(result.text)), result.text); return
-            self.capture_started = time.monotonic(); self.capture_progress.setValue(0); self.capture_timer.start()
+                self._set_capture_state('cancelled' if result.cancelled else 'error'); self.main.end(False)
+                if not result.cancelled: self.main.error(self.t(explain_error(result.text)), result.text)
+                return
+            if self.main.cancel_requested:
+                self._set_capture_state('cancelled'); self.main.end(False); return
+            self.capture_started = time.monotonic(); self._set_capture_state('recording'); self.capture_timer.start()
             self.main.notice(self.t('Нажмите кнопку на руле сейчас…'))
         self.main.active_job = self.main.adb(['logcat', '-b', 'main', '-b', 'system', '-b', 'events', '-c'], cleared, target=self.capture_target)
 
     def capture_tick(self):
         elapsed = time.monotonic() - self.capture_started; self.capture_progress.setValue(min(60, int(elapsed * 10)))
+        self.main.global_progress.setRange(0,60); self.main.global_progress.setValue(self.capture_progress.value())
         if self.main.cancel_requested:
-            self.capture_timer.stop(); self.capture_btn.setEnabled(True); self.main.end(False); return
+            self.capture_timer.stop(); self.capture_progress.setValue(0); self._set_capture_state('cancelled'); self.main.end(False); return
+        self._capture_labels()
         if elapsed < 6: return
-        self.capture_timer.stop()
+        self.capture_timer.stop(); self._set_capture_state('reading')
         def captured(result):
-            self.capture_btn.setEnabled(True); self.main.end(result.ok)
-            if not result.ok: self.main.error(self.t(explain_error(result.text)), result.text); return
+            if not result.ok:
+                self._set_capture_state('cancelled' if result.cancelled else 'error'); self.main.end(False)
+                if not result.cancelled: self.main.error(self.t(explain_error(result.text)), result.text)
+                return
+            if self.main.cancel_requested:
+                self._set_capture_state('cancelled'); self.main.end(False); return
             self.full_capture = result.text; self.capture_views[3].setPlainText(result.text)
+            self.capture_stacks[3].setCurrentIndex(1 if result.text.strip() else 0); self._set_capture_state('processing')
             self.main.background(lambda: classify_capture(result.text), self.show_capture)
         self.main.active_job = self.main.adb(['logcat', '-d', '-b', 'main', '-b', 'system', '-b', 'events', '-v', 'time'], captured, target=self.capture_target, timeout=30000, check=False)
 
     def show_capture(self, categories, error):
-        for view, lines in zip(self.capture_views, categories or [[], [], []]): view.setPlainText('\n'.join(lines) or self.t('События не найдены. CAN/MCU может обходить Android input и публичные логи.'))
+        if self.main.cancel_requested:
+            self._set_capture_state('cancelled'); self.main.end(False); return
+        if error:
+            self._set_capture_state('error'); self.main.end(False); self.main.error(self.t('Не удалось обработать запись.'), str(error)); return
+        for i, (view, lines) in enumerate(zip(self.capture_views, categories or [[], [], []])):
+            view.setPlainText('\n'.join(lines)); self.capture_counts[i] = len(lines); self.capture_stacks[i].setCurrentIndex(1 if lines else 0)
+            self._set_empty(self.capture_empty[i], 'Подходящих сообщений не найдено', 'Попробуйте ещё раз и нажмите кнопку после начала отсчёта. Некоторые кнопки автомобиля не показывают свои действия в доступном журнале.')
+        self.capture_counts[3] = len(self.full_capture.splitlines())
+        if not self.full_capture.strip():
+            self._set_empty(self.capture_empty[3], 'Запись пуста', 'Автомобиль не передал сообщений во время записи. Можно попробовать ещё раз.')
+        self._set_capture_state('done'); self.main.end(True)
 
     @feature_required('inspector')
     def toggle_stream(self, name):
         if name in self.streams:
-            self.streams.pop(name).cancel(); self.live_buttons[name].setText(self.t('Старт')); return
+            self.streams.pop(name).cancel(); self.live_states[name] = 'stopped'; self._flush_live(); self._live_labels(); return
         if not self.main.target: self.main.error(self.t('Сначала подключите устройство.')); return
         if self.main.busy: self.main.error(self.t('Дождитесь завершения или отмените текущее задание.')); return
         args = ['logcat', '-b', 'main', '-b', 'system', '-b', 'events', '-v', 'time'] if name == 'logcat' else ['getevent', '-lt']
         def chunk(text):
             self.stream_buffers[name] = (self.stream_buffers[name] + text)[-2_000_000:]
-            filters = [word.strip().lower() for word in self.live_filter.text().split(',') if word.strip()]
-            append_log(self.live_views[name], ''.join(line for line in text.splitlines(keepends=True) if not filters or any(word in line.lower() for word in filters)))
+            if not self.live_paused[name]: self.live_pending[name] = (self.live_pending[name] + text)[-2_000_000:]
+            if not self.live_timer.isActive(): self.live_timer.start()
+            self.live_save_btn.setEnabled(True)
         def finished(result):
-            self.streams.pop(name, None); self.live_buttons[name].setText(self.t('Старт'))
+            self.streams.pop(name, None); self._flush_live(); self.live_states[name] = 'error' if not result.ok and not result.cancelled else 'stopped'
             if not result.ok and not result.cancelled:
-                append_log(self.live_views[name], '\n' + self.t(explain_error(result.text)) + '\n' + result.text + '\n')
-        self.streams[name] = self.main.adb(args, finished, shell=name == 'getevent', privileged=name == 'getevent', stream=chunk, timeout=0, check=False)
-        self.live_buttons[name].setText(self.t('Стоп'))
+                denied = bool(name == 'getevent' and re.search(r'Permission denied|not permitted|SecurityException', result.text, re.I))
+                if denied: self.live_states[name] = 'denied'
+                explanation = self.t('Автомобиль не разрешает читать нажатия кнопок.') if denied else self.t(explain_error(result.text))
+                self.stream_buffers[name] = (self.stream_buffers[name] + '\n' + explanation + '\n' + result.text)[-2_000_000:]
+                append_log(self.live_views[name], '\n' + explanation + '\n' + result.text + '\n'); self.live_stacks[name].setCurrentIndex(1)
+            self._live_labels()
+        self.live_states[name] = 'running'; self.streams[name] = self.main.adb(args, finished, shell=name == 'getevent', privileged=name == 'getevent', stream=chunk, timeout=0, check=False)
+        self._set_empty(self.live_empty[name], 'Ожидаем сообщения', 'Выполните нужное действие в автомобиле. Новые сообщения появятся здесь.')
+        self._live_labels()
+
+    def toggle_pause(self, name):
+        self.live_paused[name] = not self.live_paused[name]; self.live_pending[name] = ''
+        if not self.live_paused[name]: self._render_live(name)
+        self._live_labels()
+
+    def _filtered_lines(self, text):
+        filters = [word.strip().lower() for word in self.live_filter.text().split(',') if word.strip()]
+        return ''.join(line for line in text.splitlines(keepends=True) if not filters or any(word in line.lower() for word in filters))
+
+    def _flush_live(self):
+        for name in self.live_views:
+            if self.live_paused[name]: continue
+            pending = self.live_pending[name]; self.live_pending[name] = ''
+            if pending:
+                visible = self._filtered_lines(pending)
+                if visible: append_log(self.live_views[name], visible); self.live_stacks[name].setCurrentIndex(1)
+        if not any(self.live_pending.values()) and not self.streams: self.live_timer.stop()
+
+    def _render_live(self, name):
+        visible = self._filtered_lines(self.stream_buffers[name]); self.live_views[name].setPlainText(visible)
+        self.live_stacks[name].setCurrentIndex(1 if visible else 0)
+        if self.stream_buffers[name] and not visible:
+            self._set_empty(self.live_empty[name], 'Совпадений не найдено', 'Попробуйте изменить слова в фильтре. Полная запись остаётся доступна для сохранения.')
+        if visible:
+            cursor = self.live_views[name].textCursor(); cursor.movePosition(QTextCursor.MoveOperation.End); self.live_views[name].setTextCursor(cursor)
 
     def refilter(self):
-        filters = [word.strip().lower() for word in self.live_filter.text().split(',') if word.strip()]
-        for name, view in self.live_views.items(): view.setPlainText('\n'.join(line for line in self.stream_buffers[name].splitlines() if not filters or any(w in line.lower() for w in filters)))
+        for name in self.live_views:
+            if not self.live_paused[name]: self.live_pending[name] = ''; self._render_live(name)
 
     def stop_streams(self):
-        self.capture_timer.stop()
+        self.capture_timer.stop(); self.live_timer.stop()
         for job in list(self.streams.values()): job.cancel()
-        self.streams.clear()
+        self.streams.clear(); self._live_labels()
 
     @feature_required('inspector')
     def search_packages(self):
         if not self.main.ready(): return
-        word = self.package_search.text().strip().lower()
+        word = self.package_search.text().strip().lower(); self.package_search_status.setText(self.t('Ищем приложения…'))
+        target = self.main.target
         def done(ok, results):
-            if ok:
+            if ok and target == self.main.target:
                 packages = sorted(line[8:] for line in results[0].text.splitlines() if line.startswith('package:') and word in line.lower())
-                self.package_combo.clear(); self.package_combo.addItems(packages)
+                self.package_combo.clear(); self.package_combo.addItems(packages); self.package_found = len(packages); self._package_labels()
+                if not packages: self.package_search_status.setText(self.t('Приложения не найдены. Попробуйте другую часть адреса.'))
+            elif not ok: self._package_labels()
         self.main.sequence(self.t('Найти'), [Step(['pm', 'list', 'packages'])], done)
+
+    @staticmethod
+    def resolver_sections(text):
+        """Preserve complete lines; group only exact resolver-table boundaries."""
+        sections = {'Activity': [], 'Receiver': [], 'Service': []}; current = None; header_indent = 0
+        for line in text.splitlines(keepends=True):
+            header = re.match(r'^\s*(Activity|Receiver|Service) Resolver Table\s*:', line)
+            if header:
+                current = header[1]; header_indent = len(line) - len(line.lstrip(' \t')); sections[current].append(line); continue
+            indent = len(line) - len(line.lstrip(' \t'))
+            if current and line.strip() and indent <= header_indent: current = None
+            if current: sections[current].append(line)
+        return [''.join(sections[key]).strip() for key in ('Activity', 'Receiver', 'Service')]
 
     @feature_required('inspector')
     def dump_package(self):
         pkg = self.package_combo.currentText().strip()
         if not self.main.ready(): return
         if not PACKAGE_RE.fullmatch(pkg): self.main.error(self.t('Выберите пакет.')); return
+        target = self.main.target; self.package_state = 'loading'; self._package_labels(); self.dump_generation += 1; generation = self.dump_generation
+        def parsed(sections, error):
+            if target != self.main.target or generation != self.dump_generation: return
+            self.package_state = 'error' if error else 'done'; self._package_labels()
+            if error: self.main.error(self.t('Не удалось обработать сведения.'), str(error)); return
+            for i, (view, text) in enumerate(zip(self.dump_views, sections + [self.full_dump])):
+                view.setPlainText(text); self.dump_stacks[i].setCurrentIndex(1 if text.strip() else 0)
+                if not text.strip():
+                    self._set_empty(self.dump_empty[i], 'Этот раздел отсутствует', 'В доступных сведениях приложение не сообщило об этих действиях. Полные сведения доступны в соседнем разделе.')
+            from PySide6.QtWidgets import QTextEdit
+            from PySide6.QtGui import QTextCharFormat
+            highlights = []
+            for match in re.finditer(r'^.*(?:Activity|Receiver|Service) Resolver Table.*$', self.full_dump, re.M):
+                selection = QTextEdit.ExtraSelection(); cursor = self.dump_view.textCursor(); cursor.setPosition(match.start()); cursor.setPosition(match.end(), QTextCursor.MoveMode.KeepAnchor)
+                selection.cursor = cursor; fmt = QTextCharFormat(); fmt.setForeground(QColor('#64DFF4')); fmt.setFontWeight(QFont.Weight.Bold); selection.format = fmt; highlights.append(selection)
+            self.dump_view.setExtraSelections(highlights)
         def done(ok, results):
-            if ok:
-                self.full_dump = results[0].text; self.dump_view.setPlainText(self.full_dump)
-                selections = []
-                from PySide6.QtWidgets import QTextEdit
-                from PySide6.QtGui import QTextCharFormat
-                for match in re.finditer(r'^.*(?:Activity|Receiver|Service) Resolver Table.*$', self.full_dump, re.M):
-                    selection = QTextEdit.ExtraSelection(); cursor = self.dump_view.textCursor(); cursor.setPosition(match.start()); cursor.setPosition(match.end(), QTextCursor.MoveMode.KeepAnchor)
-                    selection.cursor = cursor; fmt = QTextCharFormat(); fmt.setForeground(QColor('#64DFF4')); fmt.setFontWeight(QFont.Weight.Bold); selection.format = fmt; selections.append(selection)
-                self.dump_view.setExtraSelections(selections)
-        self.main.sequence(self.t('Дамп пакета'), [Step(['dumpsys', 'package', pkg])], done)
+            if ok and target == self.main.target and generation == self.dump_generation:
+                self.full_dump = results[0].text; self.dump_save_btn.setEnabled(bool(self.full_dump)); dump_text = self.full_dump
+                self.main.background(lambda: self.resolver_sections(dump_text), parsed)
+            elif not ok: self.package_state = 'error'; self._package_labels()
+        self.main.sequence(self.t('Получить сведения'), [Step(['dumpsys', 'package', pkg])], done)
 
 @dataclass
 class ApkInfo:
@@ -1812,29 +2588,80 @@ def validate_apks(infos: list[ApkInfo], api=0):
     if api and any(i.min_sdk > api for i in infos): raise ValueError('Приложение требует более новую версию Android (minSdk выше API ГУ).')
 
 class InstallerPage(Page):
+
+    class DropArea(QFrame):
+        paths_dropped = Signal(object)
+        def __init__(self, page):
+            super().__init__(page); self.page = page; self.setAcceptDrops(True); self.setObjectName('dropZone')
+            self.setMinimumHeight(168); layout = QVBoxLayout(self); layout.setContentsMargins(24, 24, 24, 24); layout.setSpacing(12)
+            image = QLabel(); image.setPixmap(ui_icon('apk', size=32).pixmap(32, 32)); image.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(image)
+            heading = page.label('Перетащите файлы приложения сюда', 'section'); heading.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(heading)
+            caption = page.hint('Подойдут APK и готовые комплекты приложений. Можно выбрать несколько файлов или целую папку.'); caption.setAlignment(Qt.AlignmentFlag.AlignCenter); layout.addWidget(caption)
+        def dragEnterEvent(self, event):
+            if event.mimeData().hasUrls() and not self.page.main.busy and self.page.main.allowed('apk.install', False):
+                self.setProperty('dragActive', True); self.style().unpolish(self); self.style().polish(self); event.acceptProposedAction()
+        def dragLeaveEvent(self, event):
+            self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
+        def dropEvent(self, event):
+            self.setProperty('dragActive', False); self.style().unpolish(self); self.style().polish(self)
+            self.paths_dropped.emit([url.toLocalFile() for url in event.mimeData().urls()]); event.acceptProposedAction()
+
     def __init__(self, main):
         super().__init__(main); self.setAcceptDrops(True); self.files = []; self.service = InstallService(main); self.cancel_event = self.service.cancel_event
-        card = self.card('Установщик APK'); self.mode = QComboBox(); self.mode_keys = ['Одиночный APK', 'Пакетная установка', 'Split / APKS / XAPK / APKM']
-        self.mode.addItems([self.t(k) for k in self.mode_keys]); self.row(card, self.label('Режим установки'), self.mode, 1)
-        self.row(card, self.button('Добавить файлы', self.add_files), self.button('Добавить папку', self.add_folder), self.button('Очистить', self.clear_files), 1)
-        self.drop_hint = self.label('Перетащите APK или архивы сюда', 'subtitle'); card.addWidget(self.drop_hint)
-        self.file_table = table([self.t('Файл'), self.t('Размер'), self.t('Статус')]); self.file_table.setMinimumHeight(230); self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        card.addWidget(self.file_table)
+        card = self.card('Приложения с компьютера', 'Выберите файлы, проверьте список и установите их в автомобиль.')
+        self.drop_area = self.DropArea(self); self.drop_area.paths_dropped.connect(self.add_paths); card.addWidget(self.drop_area)
+        self.drop_hint = self.drop_area.findChildren(QLabel)[-1]
+        self.add_button = self.button('Выбрать файлы', self.add_files, True, icon='add', help_key='Выберите один APK, несколько приложений или готовый комплект из файлов.')
+        self.folder_button = self.button('Выбрать папку', self.add_folder, icon='folder', help_key='Добавит все APK из выбранной папки. Каждое приложение установится по очереди.')
+        self.row(card, self.add_button, self.folder_button)
+        self.mode = QComboBox(); self.mode_keys = ['Одно приложение', 'Несколько приложений', 'Комплект одного приложения']; self.mode.addItems([self.t(k) for k in self.mode_keys])
+        self.mode.setProperty('feature', 'apk.install'); self.bind(self.mode, 'Укажите, устанавливаете вы один файл, разные приложения или части одного приложения.', 'setToolTip')
+        options = QHBoxLayout(); options.setSpacing(12); options.addWidget(self.label('Как установить')); options.addWidget(self.mode, 1); card.addLayout(options)
+        self.mode_hint = self.hint('Один APK — одно приложение.'); card.addWidget(self.mode_hint); self.mode.currentIndexChanged.connect(self.update_mode_hint)
+        queue = self.card('Выбранные файлы')
+        self.queue_summary = QLabel(); self.queue_summary.setObjectName('subtitle'); queue.addWidget(self.queue_summary)
+        self.file_table = table([self.t('Файл'), self.t('Размер'), self.t('Статус')]); self.file_table.setMinimumHeight(176); self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.file_table.horizontalHeader().setMinimumSectionSize(90); queue.addWidget(self.file_table)
+        self.empty_queue = EmptyState(self.t('Файлы ещё не выбраны'), self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».'), icon='apk'); queue.addWidget(self.empty_queue)
+        self.clear_button = self.button('Очистить список', self.clear_files, icon='delete', help_key='Уберёт выбранные файлы из списка. Файлы на компьютере останутся.')
+        self.row(queue, self.clear_button)
+        settings = self.card('Параметры установки', 'Обычные параметры уже выбраны. Меняйте их только при необходимости.')
         self.flags = []
-        for text, checked in [('Переустановка (-r)', True), ('Понижение версии (-d)', False), ('Выдать разрешения (-g)', True)]:
-            check = self.bind(QCheckBox(), text); check.setChecked(checked); self.flags.append(check)
-        self.row(card, *self.flags, 1)
-        self.progress = QProgressBar(); self.progress.setValue(0); self.install_button = self.button('Установить', self.install, True)
-        self.row(card, self.install_button, self.progress)
-        card = self.card('Журнал операций'); self.log = logbox(); self.log.setMinimumHeight(260); card.addWidget(self.log)
-        self.row(card, self.button('Сохранить', lambda: self.save_text(self.log.toPlainText(), 'voyah-install.txt')), 1)
-        self.service.log_message.connect(lambda text: append_log(self.log,text)); self.service.status_changed.connect(self.set_status); self.service.progress_changed.connect(self.progress.setValue); self.service.finished.connect(lambda ok: self.install_button.setEnabled(self.main.allowed('apk.install',False)))
-        self.layout.addStretch()
+        for title, checked, help_key in [
+            ('Сохранить данные при переустановке', True, 'Заменит приложение новой версией, сохранив его настройки и личные данные.'),
+            ('Разрешить старую версию', False, 'Разрешит установить более старую версию. Некоторые приложения это не поддерживают.'),
+            ('Выдать разрешения приложению', True, 'Сразу разрешит приложению использовать запрошенные возможности, например микрофон и память.')]:
+            check = self.bind(QCheckBox(), title); check.setChecked(checked); check.setProperty('feature', 'apk.install'); self.bind(check, help_key, 'setToolTip'); self.flags.append(check); settings.addWidget(check)
+        details_layout = QVBoxLayout(); details_layout.setContentsMargins(0, 0, 0, 0); details_layout.addWidget(self.hint('Флаги установки: сохранение данных — -r, старая версия — -d, разрешения — -g. Части одного приложения устанавливаются вместе.'))
+        technical=self.disclosure('Технические подробности',settings)
+        technical.body.addLayout(details_layout)
+        self.install_button = self.button('Установить в автомобиль', self.install, True, icon='download', help_key='Проверит выбранные файлы и установит их на подключённое устройство. Результат появится напротив каждого файла.')
+        action = QHBoxLayout(); action.addWidget(self.install_button); action.addStretch(); settings.addLayout(action)
+        self.progress = QProgressBar(self); self.progress.setValue(0); self.progress.hide(); self.log = logbox(); self.log.setParent(self); self.log.hide()
+        self.service.log_message.connect(lambda text: append_log(self.log, text)); self.service.status_changed.connect(self.set_status); self.service.progress_changed.connect(self.progress.setValue)
+        self.service.progress_changed.connect(self.update_progress); self.service.finished.connect(lambda _: self.update_actions()); self.file_table.itemSelectionChanged.connect(self.update_actions)
+        self.layout.addStretch(); self.update_mode_hint(); self.update_actions()
+
+    def update_progress(self, value):
+        if self.main.busy and hasattr(self.main, 'global_progress'):
+            self.main.global_progress.setRange(0, 100); self.main.global_progress.setValue(value)
+
+    def update_mode_hint(self):
+        keys = ['Один APK — одно приложение.', 'Разные приложения установятся по очереди. Не выбирайте этот режим для частей одного приложения.', 'Выберите все части одного приложения или один готовый архив. Комплект установится целиком.']
+        self.mode_hint.setText(self.t(keys[self.mode.currentIndex()])); self.update_actions()
+
+    def update_actions(self):
+        editable = not self.main.busy and self.main.allowed('installer', False) and self.main.allowed('apk.install', False)
+        for widget in [self.add_button, self.folder_button, self.mode, self.drop_area, *self.flags]: widget.setEnabled(editable)
+        self.clear_button.setEnabled(editable and bool(self.files)); self.install_button.setEnabled(editable and bool(self.files) and bool(self.main.target))
+        self.file_table.setVisible(bool(self.files)); self.empty_queue.setVisible(not self.files)
+        self.queue_summary.setText(self.t('Файлов в списке: {count}', count=len(self.files)))
 
     def retranslate(self):
         super().retranslate()
         for i, key in enumerate(self.mode_keys): self.mode.setItemText(i, self.t(key))
         self.file_table.setHorizontalHeaderLabels([self.t(k) for k in ('Файл', 'Размер', 'Статус')])
+        self.empty_queue.title.setText(self.t('Файлы ещё не выбраны')); self.empty_queue.description.setText(self.t('Перетащите приложение в область выше или нажмите «Выбрать файлы».')); self.update_mode_hint(); self.update_actions()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls(): event.acceptProposedAction()
@@ -1855,6 +2682,7 @@ class InstallerPage(Page):
                 self.file_table.item(row, 0).setToolTip(str(p))
         if any(Path(p).suffix.lower() != '.apk' for p in self.files): self.mode.setCurrentIndex(2)
         elif len(self.files) > 1 and self.mode.currentIndex() == 0: self.mode.setCurrentIndex(1)
+        self.update_actions()
 
     @feature_required('apk.install', 'installer')
     def add_files(self):
@@ -1866,13 +2694,14 @@ class InstallerPage(Page):
         if folder: self.add_paths([folder])
 
     def clear_files(self):
-        if not self.main.busy: self.files.clear(); self.file_table.setRowCount(0)
+        if not self.main.busy: self.files.clear(); self.file_table.setRowCount(0); self.update_actions()
 
     def set_status(self, rows, text, success=None):
         for row in rows:
             item = QTableWidgetItem(text)
             if success is not None: item.setForeground(QColor('#51D8A5' if success else '#FF939E'))
             self.file_table.setItem(row, 2, item)
+        self.update_actions()
 
     @feature_required('apk.install', 'installer')
     def install(self):
@@ -1885,7 +2714,7 @@ class InstallerPage(Page):
         if mode == 2 and any(Path(p).suffix.lower() != '.apk' for p in self.files) and len(self.files) != 1:
             self.main.error(self.t('Для продолжения нужен один комплект приложения.')); return
         self.log.clear(); self.progress.setValue(0)
-        if self.service.start(self.files,mode,[flag for flag,check in zip(('-r','-d','-g'),self.flags) if check.isChecked()]): self.install_button.setEnabled(False)
+        if self.service.start(self.files,mode,[flag for flag,check in zip(('-r','-d','-g'),self.flags) if check.isChecked()]): self.update_actions()
 
 class InstallService(QObject):
     log_message = Signal(str)
@@ -2105,24 +2934,78 @@ def human_size(size):
         value /= 1024
 
 class ExplorerPage(Page):
+
     def __init__(self, main):
         super().__init__(main); self.setAcceptDrops(True); self.current_path = '/sdcard/'; self.entries = []
-        card = self.card('Путь на ГУ'); self.path = QLineEdit('/sdcard/'); self.path.returnPressed.connect(self.refresh)
-        self.row(card, self.button('Вверх', self.up), self.path, self.button('Обновить', self.refresh, True))
-        bookmarks = QHBoxLayout()
-        for path in ('/sdcard/', '/sdcard/Download/', '/storage/', '/system/priv-app/', '/data/local/tmp/'):
-            b = QPushButton(path); b.clicked.connect(lambda checked=False, p=path: self.navigate(p)); bookmarks.addWidget(b)
-        card.addLayout(bookmarks)
-        self.file_table = table([self.t(k) for k in ('Имя', 'Тип', 'Размер', 'Дата')]); self.file_table.setMinimumHeight(180)
-        self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch); self.file_table.cellDoubleClicked.connect(self.open_entry); 
-        self.row(card, self.button('Загрузить в ГУ', self.push_files, True), self.button('Скачать на ПК', self.pull_files), self.button('Создать папку', self.mkdir),
-                 self.button('Переименовать', self.rename), self.button('Удалить', self.delete, danger=True))
-        self.row(card, self.button('Установить APK', self.install_remote), 1); card.addWidget(self.file_table)
-        self.progress = QProgressBar(); self.progress.setValue(0); card.addWidget(self.progress)
-        self.log = logbox(); self.log.setMinimumHeight(160); self.layout.addWidget(self.log); self.layout.addStretch()
+        card = self.card('Память автомобиля', 'Открывайте папки, передавайте файлы в автомобиль и сохраняйте их на компьютер.')
+        self.toolbar_layout = card; self.toolbar_frame = card.parentWidget(); self.toolbar_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.toolbar_title = card.itemAt(0).widget(); self.toolbar_description = card.itemAt(1).widget()
+        self.path = QLineEdit('/sdcard/'); self.path.returnPressed.connect(self.refresh); self.bind(self.path, 'Путь к открытой папке в памяти автомобиля. Можно вставить другой путь и нажать Enter.', 'setToolTip')
+        self.up_button = self.button('Вверх', self.up, icon='folder', help_key='Откроет папку на один уровень выше.')
+        self.refresh_button = self.button('Обновить', self.refresh, icon='refresh', help_key='Заново прочитает содержимое открытой папки.')
+        self.up_button.setProperty('feature', 'files'); path_row = QHBoxLayout(); path_row.setSpacing(12); path_row.addWidget(self.up_button); path_row.addWidget(self.path, 1); path_row.addWidget(self.refresh_button); card.addLayout(path_row)
+        self.bookmarks_widget = QWidget(); bookmarks = FlowLayout(); self.bookmarks_widget.setLayout(bookmarks); self.bookmark_buttons = []
+        for label, path in [('Общая память', '/sdcard/'), ('Загрузки', '/sdcard/Download/'), ('Все накопители', '/storage/'), ('Системные приложения', '/system/priv-app/'), ('Временные файлы', '/data/local/tmp/')]:
+            button = self.button(label, lambda checked=False, p=path: self.navigate(p), icon='folder', help_key='Быстро откроет эту папку в памяти автомобиля.'); button.setProperty('feature', 'files'); button.setProperty('quiet', True); bookmarks.addWidget(button); self.bookmark_buttons.append(button)
+        card.addWidget(self.bookmarks_widget)
+        self.push_button = self.button('Передать в автомобиль', self.push_files, True, icon='upload', help_key='Выберите файлы на компьютере. Они будут скопированы в открытую папку автомобиля.')
+        self.pull_button = self.button('Скачать на компьютер', self.pull_files, icon='download', help_key='Сохранит выбранные файлы и папки на компьютер. Исходные файлы в автомобиле останутся.')
+        self.more_button = self.button('Ещё', lambda: None, icon='more', help_key='Создание папки, переименование, удаление и установка выбранного APK.')
+        self.more_menu = QMenu(self); self.more_menu.setToolTipsVisible(True); self.more_actions = {}
+        for key, handler, feature, icon in [('Создать папку', self.mkdir, 'files.write', 'add'), ('Переименовать', self.rename, 'files.write', 'rename'), ('Установить APK', self.install_remote, 'apk.install', 'apk'), ('Удалить', self.delete, 'files.write', 'delete')]:
+            action = self.more_menu.addAction(ui_icon(icon), self.t(key)); self.bind(action, key); action.setProperty('feature', feature); action.triggered.connect(handler); self.more_actions[key] = action
+            help_key = {'Создать папку': 'Создаст новую папку внутри открытой папки автомобиля.', 'Переименовать': 'Изменит имя одного выбранного файла или папки.', 'Установить APK': 'Проверит выбранный APK в памяти автомобиля и установит его как приложение.', 'Удалить': 'Удалит выбранные файлы и папки из автомобиля. Отменить это действие нельзя.'}[key]
+            self.bind(action, help_key, 'setToolTip'); action.setProperty('danger', key == 'Удалить')
+        self.bookmark_menu = self.more_menu.addMenu(ui_icon('folder'), self.t('Путь на ГУ')); self.bind(self.bookmark_menu, 'Путь на ГУ', 'setTitle'); self.bookmark_actions = []
+        for button, remote_path in zip(self.bookmark_buttons, ('/sdcard/', '/sdcard/Download/', '/storage/', '/system/priv-app/', '/data/local/tmp/')):
+            action = self.bookmark_menu.addAction(ui_icon('folder'), button.text()); action.setProperty('feature', 'files'); action.triggered.connect(lambda checked=False, p=remote_path: self.navigate(p)); self.bookmark_actions.append(action)
+        self.more_button.setMenu(self.more_menu); actions = QHBoxLayout(); actions.setSpacing(8)
+        for button in (self.push_button, self.pull_button, self.more_button): actions.addWidget(button)
+        actions.addStretch(1); card.addLayout(actions)
+        listing = self.card('Содержимое папки'); self.list_summary = QLabel(); self.list_summary.setObjectName('subtitle'); listing.addWidget(self.list_summary)
+        self.listing_title = listing.itemAt(0).widget(); listing.setAlignment(Qt.AlignmentFlag(0)); listing.parentWidget().setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.file_table = table([self.t(k) for k in ('Имя', 'Тип', 'Размер', 'Дата')]); self.file_table.setMinimumHeight(120); self.file_table.horizontalHeader().setMinimumSectionSize(80)
+        self.file_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch); self.file_table.cellDoubleClicked.connect(self.open_entry); self.file_table.itemSelectionChanged.connect(self.update_actions)
+        self.file_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.file_table.customContextMenuRequested.connect(self.open_context_menu); listing.addWidget(self.file_table, 1)
+        self.empty_files = EmptyState(self.t('Откройте память автомобиля'), self.t('Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.'), icon='folder'); listing.addWidget(self.empty_files)
+        self.layout.setStretch(self.layout.count() - 1, 1)
+        self.progress = QProgressBar(self); self.progress.setValue(0); self.progress.hide(); self.log = logbox(); self.log.setParent(self); self.log.hide(); self.update_actions()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event); self.adapt_layout()
+
+    def adapt_layout(self):
+        if not hasattr(self, 'toolbar_frame'): return
+        compact = self.height() < 500 or self.width() < 820
+        self.toolbar_title.setVisible(not compact); self.toolbar_description.setVisible(not compact)
+        self.bookmarks_widget.setVisible(not compact); self.listing_title.setVisible(not compact)
+        self.bookmark_menu.menuAction().setVisible(compact)
+        self.up_button.setText('' if compact else self.t('Вверх')); self.up_button.setFixedWidth(44 if compact else self.up_button.sizeHint().width())
+        self.toolbar_layout.invalidate()
+        height = self.toolbar_layout.heightForWidth(max(1, self.width())) if self.toolbar_layout.hasHeightForWidth() else self.toolbar_layout.minimumSize().height()
+        self.toolbar_frame.setMinimumHeight(max(0, height)); self.toolbar_frame.updateGeometry()
+
+    def open_context_menu(self, position):
+        self.update_actions(); self.more_menu.exec(self.file_table.viewport().mapToGlobal(position))
+
+    def update_actions(self):
+        ready = bool(self.main.target) and not self.main.busy and self.main.allowed('files', False); selected = self.selected() if hasattr(self, 'file_table') else []
+        for widget in [self.up_button, self.refresh_button, self.path, *self.bookmark_buttons]: widget.setEnabled(ready)
+        self.push_button.setEnabled(ready and self.main.allowed('files.write', False)); self.pull_button.setEnabled(ready and bool(selected))
+        enabled = {'Создать папку': ready, 'Переименовать': ready and len(selected) == 1, 'Удалить': ready and bool(selected), 'Установить APK': ready and len(selected) == 1 and not selected[0]['directory'] and selected[0]['name'].lower().endswith('.apk')}
+        for key, action in self.more_actions.items(): action.setEnabled(bool(enabled[key]) and self.main.allowed(action.property('feature'), False))
+        for action in self.bookmark_actions: action.setEnabled(ready)
+        self.more_button.setEnabled(ready or any(action.isEnabled() for action in self.more_actions.values()))
+        self.list_summary.setText(self.t('Объектов: {count} · Выбрано: {selected}', count=len(self.entries), selected=len(selected)))
 
     def retranslate(self):
-        super().retranslate(); self.file_table.setHorizontalHeaderLabels([self.t(k) for k in ('Имя', 'Тип', 'Размер', 'Дата')])
+        super().retranslate(); self.file_table.setHorizontalHeaderLabels([self.t(k) for k in ('Имя', 'Тип', 'Размер', 'Дата')]); self.update_actions()
+        for action, button in zip(self.bookmark_actions, self.bookmark_buttons): action.setText(button.text())
+        self.adapt_layout()
+        if not self.entries:
+            self.empty_files.title.setText(self.t('Папка пуста' if getattr(self, 'loaded', False) else 'Откройте память автомобиля'))
+            self.empty_files.description.setText(self.t('В этой папке пока нет файлов. Можно передать их с компьютера.' if getattr(self, 'loaded', False) else 'Подключите автомобиль и нажмите «Обновить». Файлы появятся здесь.'))
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls(): event.acceptProposedAction()
@@ -2155,10 +3038,16 @@ class ExplorerPage(Page):
             for col, text in enumerate(values): self.file_table.setItem(row, col, QTableWidgetItem(text))
             item = self.file_table.item(row, 0); item.setData(Qt.ItemDataRole.UserRole, entry)
             item.setToolTip(entry['mode'] + (' → ' + entry['link'] if entry['link'] else ''))
-            item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon if entry['directory'] else QStyle.StandardPixmap.SP_FileLinkIcon if entry['symlink'] else QStyle.StandardPixmap.SP_FileIcon))
+            item.setIcon(ui_icon('folder' if entry['directory'] else 'link' if entry['symlink'] else 'apk' if entry['name'].lower().endswith('.apk') else 'file'))
+        self.loaded = True; self.file_table.setVisible(bool(entries)); self.empty_files.setVisible(not entries); self.retranslate()
 
     def selected(self):
-        return [self.file_table.item(index.row(), 0).data(Qt.ItemDataRole.UserRole) for index in self.file_table.selectionModel().selectedRows()]
+        entries = []
+        for index in self.file_table.selectionModel().selectedRows():
+            item = self.file_table.item(index.row(), 0)
+            entry = item.data(Qt.ItemDataRole.UserRole) if item else None
+            if isinstance(entry, dict): entries.append(entry)
+        return entries
 
     def selected_paths(self): return [posixpath.join(self.current_path, e['name']) for e in self.selected()]
 
@@ -2259,24 +3148,82 @@ class ExplorerPage(Page):
         self.main.sequence(self.t('Установить APK'),[Step(['pull',paths[0],str(local)],False,timeout=600000)],pulled,target=target)
 
 class AppsPage(Page):
+
     def __init__(self, main):
         super().__init__(main); self.packages = []
-        card = self.card('Приложения'); self.filter = QComboBox(); self.filter_keys = ['Все', 'Сторонние', 'Системные', 'Отключённые']; self.filter.addItems([self.t(k) for k in self.filter_keys])
-        self.search = self.edit('Поиск по имени пакета'); self.search.textChanged.connect(self.filter_rows)
-        self.row(card, self.filter, self.search, self.button('Обновить', self.refresh, True))
-        self.package_table = table([self.t('Пакет')]); self.package_table.setMinimumHeight(180); 
-        self.display = QComboBox(); self.display.addItems([self.t('Центральный') + ' · 1', self.t('Пассажирский') + ' · 2'])
-        self.row(card, self.display, self.button('Запустить', self.launch, True), self.button('Остановить', self.force_stop), self.button('Очистить данные и кэш', self.clear_data), 1)
-        self.row(card, self.button('Заморозить', self.disable), self.button('Разморозить', self.enable), self.button('Удалить', self.uninstall, danger=True), self.button('Экспорт APK', self.export), 1)
-        note = self.label('Системные пакеты могут отвечать за функции автомобиля.', 'subtitle'); note.setWordWrap(True); card.addWidget(note); card.addWidget(self.package_table)
-        self.log = logbox(); self.log.setMinimumHeight(160); self.layout.addWidget(self.log); self.layout.addStretch()
+        card = self.card('Приложения в автомобиле', 'Выберите приложение, чтобы открыть его на нужном экране или изменить его состояние.')
+        self.toolbar_layout = card; self.toolbar_frame = card.parentWidget(); self.toolbar_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.toolbar_title = card.itemAt(0).widget(); self.toolbar_description = card.itemAt(1).widget()
+        self.filter = QComboBox(); self.filter_keys = ['Все', 'Сторонние', 'Системные', 'Отключённые']; self.filter.addItems([self.t(k) for k in self.filter_keys]); self.filter.setProperty('feature', 'apps')
+        self.bind(self.filter, 'Покажет все приложения или только выбранную группу.', 'setToolTip')
+        self.search = self.edit('Найти приложение'); self.search.textChanged.connect(self.filter_rows)
+        self.refresh_button = self.button('Обновить', self.refresh, icon='refresh', help_key='Получит свежий список приложений из автомобиля.')
+        filters = QHBoxLayout(); filters.setSpacing(12); filters.addWidget(self.filter); filters.addWidget(self.search, 1); filters.addWidget(self.refresh_button); card.addLayout(filters)
+        self.selection_title = self.label('Выберите приложение из списка', 'section'); self.selection_title.setWordWrap(True); card.addWidget(self.selection_title)
+        self.selection_note = self.hint('Системные приложения могут отвечать за функции автомобиля. Если назначение неизвестно, оставьте их включёнными.'); card.addWidget(self.selection_note)
+        self.display = QComboBox(); self.display.addItems([self.t('Центральный') + ' · 1', self.t('Пассажирский') + ' · 2']); self.bind(self.display, 'Выберите экран, на котором откроется приложение.', 'setToolTip'); self.display.setProperty('feature', 'apps')
+        self.launch_button = self.button('Открыть приложение', self.launch, True, icon='play', help_key='Откроет выбранное приложение на центральном или пассажирском экране.')
+        self.stop_button = self.button('Остановить', self.force_stop, icon='stop', help_key='Закроет выбранное приложение. Его настройки и файлы останутся.')
+        self.export_button = self.button('Сохранить APK', self.export, icon='download', help_key='Скачает установочные файлы выбранного приложения на компьютер. Само приложение останется в автомобиле.')
+        self.more_button = self.button('Ещё', lambda: None, icon='more', help_key='Включение, отключение, очистка данных и удаление выбранного приложения.')
+        self.more_menu = QMenu(self); self.more_menu.setToolTipsVisible(True); self.more_actions = {}
+        for key, handler, feature, icon in [('Отключить приложение', self.disable, 'apps.freeze', 'stop'), ('Включить приложение', self.enable, 'apps.freeze', 'play'), ('Очистить данные и кэш', self.clear_data, 'apps.clear', 'delete'), ('Удалить приложение', self.uninstall, 'apps.uninstall', 'delete')]:
+            action = self.more_menu.addAction(ui_icon(icon), self.t(key)); self.bind(action, key); action.setProperty('feature', feature); action.triggered.connect(handler); self.more_actions[key] = action
+            help_key = {'Отключить приложение': 'Приложение перестанет запускаться. Его можно включить обратно.', 'Включить приложение': 'Снова разрешит запуск ранее отключённого приложения.', 'Очистить данные и кэш': 'Удалит настройки и личные данные внутри приложения. Само приложение останется.', 'Удалить приложение': 'Удалит выбранное приложение из автомобиля. Сначала потребуется подтверждение.'}[key]
+            self.bind(action, help_key, 'setToolTip'); action.setProperty('danger', key in ('Очистить данные и кэш', 'Удалить приложение'))
+        self.secondary_actions = {}
+        for key, handler, icon, help_key in [('Остановить', self.force_stop, 'stop', 'Закроет выбранное приложение. Его настройки и файлы останутся.'), ('Сохранить APK', self.export, 'download', 'Скачает установочные файлы выбранного приложения на компьютер. Само приложение останется в автомобиле.')]:
+            action = self.more_menu.addAction(ui_icon(icon), self.t(key)); self.bind(action, key); self.bind(action, help_key, 'setToolTip'); action.setProperty('feature', 'apps'); action.triggered.connect(handler); self.secondary_actions[key] = action
+        self.more_button.setMenu(self.more_menu); self.action_row = QHBoxLayout(); self.action_row.setSpacing(8)
+        for widget in (self.display, self.launch_button, self.stop_button, self.export_button, self.more_button): self.action_row.addWidget(widget)
+        self.action_row.addStretch(1); card.addLayout(self.action_row)
+        listing = self.card('Список приложений'); self.list_summary = QLabel(); self.list_summary.setObjectName('subtitle'); listing.addWidget(self.list_summary)
+        self.listing_title = listing.itemAt(0).widget(); listing.setAlignment(Qt.AlignmentFlag(0)); listing.parentWidget().setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.package_table = table([self.t('Приложение')]); self.package_table.setMinimumHeight(120); self.package_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.package_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.package_table.itemSelectionChanged.connect(self.update_actions); self.package_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu); self.package_table.customContextMenuRequested.connect(self.open_context_menu)
+        listing.addWidget(self.package_table, 1); self.empty_apps = EmptyState(self.t('Получите список приложений'), self.t('Подключите автомобиль и нажмите «Обновить». Затем выберите нужное приложение.'), icon='apk'); listing.addWidget(self.empty_apps)
+        self.layout.setStretch(self.layout.count() - 1, 1); self.log = logbox(); self.log.setParent(self); self.log.hide(); self.filter.currentIndexChanged.connect(self.refresh); self.update_actions()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event); self.adapt_layout()
+
+    def adapt_layout(self):
+        if not hasattr(self, 'secondary_actions'): return
+        compact = self.height() < 500 or self.width() < 820
+        self.toolbar_title.setVisible(not compact); self.toolbar_description.setVisible(not compact)
+        self.selection_title.setVisible(not compact); self.selection_note.setVisible(not compact); self.listing_title.setVisible(not compact)
+        all_width = sum(widget.sizeHint().width() for widget in (self.display, self.launch_button, self.stop_button, self.export_button, self.more_button)) + 32
+        secondary = compact or all_width > self.width() - 32
+        self.stop_button.setVisible(not secondary); self.export_button.setVisible(not secondary)
+        for action in self.secondary_actions.values(): action.setVisible(secondary)
+        self.toolbar_layout.invalidate()
+        height = self.toolbar_layout.heightForWidth(max(1, self.width())) if self.toolbar_layout.hasHeightForWidth() else self.toolbar_layout.minimumSize().height()
+        self.toolbar_frame.setMinimumHeight(max(0, height)); self.toolbar_frame.updateGeometry()
+
+    def open_context_menu(self, position):
+        self.update_actions(); self.more_menu.exec(self.package_table.viewport().mapToGlobal(position))
+
+    def update_actions(self):
+        item = self.package_table.item(self.package_table.currentRow(), 0); package = item.text() if item else ''
+        ready = bool(self.main.target) and not self.main.busy and self.main.allowed('apps', False); selected = bool(PACKAGE_RE.fullmatch(package))
+        self.refresh_button.setEnabled(ready); self.filter.setEnabled(ready); self.search.setEnabled(self.main.allowed('apps', False))
+        for button in [self.launch_button, self.stop_button, self.export_button]: button.setEnabled(ready and selected)
+        self.display.setEnabled(ready and selected)
+        for action in self.more_actions.values(): action.setEnabled(ready and selected and self.main.allowed(action.property('feature'), False))
+        for action in self.secondary_actions.values(): action.setEnabled(ready and selected)
+        self.more_button.setEnabled(any(action.isEnabled() for action in [*self.more_actions.values(), *self.secondary_actions.values()]))
+        self.selection_title.setText(package if selected else self.t('Выберите приложение из списка'))
+        self.package_table.setToolTip(self.t('Системные приложения могут отвечать за функции автомобиля. Если назначение неизвестно, оставьте их включёнными.'))
+        self.list_summary.setText(self.t('Найдено: {count}', count=self.package_table.rowCount()))
 
     def retranslate(self):
         super().retranslate()
         for i, k in enumerate(self.filter_keys): self.filter.setItemText(i, self.t(k))
-        self.package_table.setHorizontalHeaderLabels([self.t('Пакет')])
+        self.package_table.setHorizontalHeaderLabels([self.t('Приложение')]); self.filter_rows()
         self.display.setItemText(0, self.t('Центральный') + f" · {self.main.display_map['center']}")
         self.display.setItemText(1, self.t('Пассажирский') + f" · {self.main.display_map['passenger']}")
+        self.adapt_layout()
 
     @feature_required('apps', 'apps')
     def refresh(self):
@@ -2284,17 +3231,24 @@ class AppsPage(Page):
         flags = [[], ['-3'], ['-s'], ['-d']][self.filter.currentIndex()]
         def done(ok, results):
             if ok:
-                self.packages = sorted(line[8:].strip() for line in results[0].text.splitlines() if line.startswith('package:')); self.filter_rows()
+                self.loaded = True; self.packages = sorted(line[8:].strip() for line in results[0].text.splitlines() if line.startswith('package:')); self.filter_rows()
         self.main.sequence(self.t('Приложения'), [Step(['pm', 'list', 'packages', '--user', '0'] + flags)], done)
 
     def filter_rows(self):
+        current = self.package_table.item(self.package_table.currentRow(), 0); selected = current.text() if current else ''
         packages = [p for p in self.packages if self.search.text().strip().lower() in p.lower()]
         self.package_table.setRowCount(len(packages))
-        for row, pkg in enumerate(packages): self.package_table.setItem(row, 0, QTableWidgetItem(pkg))
+        for row, pkg in enumerate(packages):
+            item = QTableWidgetItem(pkg); item.setIcon(ui_icon('apk')); self.package_table.setItem(row, 0, item)
+            if pkg == selected: self.package_table.selectRow(row)
+        self.package_table.setVisible(bool(packages)); self.empty_apps.setVisible(not packages)
+        searched = bool(self.search.text().strip()); loaded = bool(getattr(self, 'loaded', False))
+        self.empty_apps.title.setText(self.t('Приложения не найдены' if searched or loaded else 'Получите список приложений'))
+        self.empty_apps.description.setText(self.t('Попробуйте другое название или измените фильтр.' if searched or loaded else 'Подключите автомобиль и нажмите «Обновить». Затем выберите нужное приложение.')); self.update_actions()
 
     def selected(self):
         row = self.package_table.currentRow()
-        pkg = self.package_table.item(row, 0).text() if row >= 0 else ''
+        item = self.package_table.item(row, 0); pkg = item.text() if item else ''
         if not PACKAGE_RE.fullmatch(pkg): self.main.error(self.t('Выберите пакет.')); return ''
         return pkg
 
@@ -2369,41 +3323,57 @@ class AppsPage(Page):
 
 class TweaksPage(Page):
     def __init__(self, main):
-        super().__init__(main)
-        card = self.card('Масштаб и дисплеи'); self.display_info = QLabel('—'); self.display_info.setObjectName('subtitle'); self.display_info.setWordWrap(True); card.addWidget(self.display_info)
-        self.display = QComboBox(); self.display_keys = ['Все мультимедийные', 'Центральный', 'Пассажирский', 'Приборная панель']; self.display.addItems([self.t(k) for k in self.display_keys])
+        super().__init__(main); self.action_buttons = []
+        card = self.card('Масштаб и дисплеи', 'Подберите удобный размер текста и элементов на выбранных экранах.')
+        self.display_info = self.label('Параметры экранов ещё не проверены', 'subtitle'); self.display_info.setWordWrap(True); card.addWidget(self.display_info)
+        form = QGridLayout(); form.setHorizontalSpacing(16); form.setVerticalSpacing(8)
+        form.addWidget(self.label('Экран'), 0, 0); form.addWidget(self.label('Масштаб интерфейса'), 0, 1)
+        self.display = QComboBox(); self.display_keys = ['Все мультимедийные', 'Центральный', 'Пассажирский', 'Приборная панель']; self.display.addItems([self.t(k) for k in self.display_keys]); self.display.currentIndexChanged.connect(self.update_actions)
         self.dpi = QComboBox(); self.dpi.setEditable(True); self.dpi.addItems(['140', '150', '160']); self.dpi.setCurrentText('160')
-        self.row(card, self.display, self.dpi, self.button('Применить DPI', lambda: self.set_density(False), True), self.button('Заводской DPI', lambda: self.set_density(True)), self.button('Обновить', self.refresh_density))
-        self.row(card, self.button('Сопоставить экраны', self.map_displays), 1)
-        card = self.card('Аудиофокус и разрешения'); self.package = self.edit('Приложение для твиков'); self.row(card, self.package)
-        grid = QGridLayout(); card.addLayout(grid)
-        actions = [
-            ('Не глушить музыку', lambda: self.app_command(['cmd', 'appops', 'set', '{pkg}', 'TAKE_AUDIO_FOCUS', 'ignore'], ['cmd', 'appops', 'get', '{pkg}', 'TAKE_AUDIO_FOCUS'], 'ignore')),
-            ('Вернуть аудиофокус', lambda: self.app_command(['cmd', 'appops', 'set', '{pkg}', 'TAKE_AUDIO_FOCUS', 'allow'], ['cmd', 'appops', 'get', '{pkg}', 'TAKE_AUDIO_FOCUS'], 'allow')),
-            ('Микрофон', lambda: self.grant('android.permission.RECORD_AUDIO')),
-            ('Поверх окон', lambda: self.app_command(['appops', 'set', '{pkg}', 'SYSTEM_ALERT_WINDOW', 'allow'], ['appops', 'get', '{pkg}', 'SYSTEM_ALERT_WINDOW'], 'allow')),
-            ('WRITE_SECURE_SETTINGS', lambda: self.grant('android.permission.WRITE_SECURE_SETTINGS')),
-            ('Белый список питания', lambda: self.app_command(['dumpsys', 'deviceidle', 'whitelist', '+{pkg}'], ['dumpsys', 'deviceidle', 'whitelist'], '{pkg}')),
+        form.addWidget(self.display, 1, 0); form.addWidget(self.dpi, 1, 1); form.setColumnStretch(0, 1); form.setColumnStretch(1, 1); card.addLayout(form)
+        self.row(card, self.action_button('Применить масштаб', lambda: self.set_density(False), 'tweaks.dpi', icon='sliders', accent=True, help_key='Изменит размер текста и кнопок на выбранном экране. Большее число делает элементы крупнее. Приборная панель требует отдельного подтверждения.'), self.action_button('Вернуть заводской масштаб', lambda: self.set_density(True), 'tweaks.dpi', icon='undo', help_key='Уберёт пользовательский масштаб и вернёт заводской размер элементов на выбранных экранах.'), self.action_button('Проверить экраны', self.refresh_density, 'tweaks.dpi', icon='monitor', help_key='Прочитает текущие размеры и масштаб экранов. Ничего не меняет.'))
+        self.row(card, self.action_button('Сопоставить экраны', self.map_displays, 'tweaks.dpi', icon='settings', help_key='Поможет указать, какой экран является центральным, пассажирским и приборным, если прошивка использует другой порядок.'))
+        card = self.card('Аудиофокус и разрешения', 'Выберите приложение и настройте, к каким возможностям автомобиля у него есть доступ.')
+        self.package = self.edit('Введите адрес приложения, например ru.vk.store'); self.package.textChanged.connect(self.update_actions); card.addWidget(self.package)
+        permissions = ResponsiveGrid(min_card_width=260, max_columns=3); card.addWidget(permissions)
+        definitions = [
+            ('volume', 'Музыка без пауз', 'Не давайте выбранному приложению прерывать музыку.', 'Не глушить музыку', lambda: self.app_command(['cmd', 'appops', 'set', '{pkg}', 'TAKE_AUDIO_FOCUS', 'ignore'], ['cmd', 'appops', 'get', '{pkg}', 'TAKE_AUDIO_FOCUS'], 'ignore'), 'Вернуть аудиофокус', lambda: self.app_command(['cmd', 'appops', 'set', '{pkg}', 'TAKE_AUDIO_FOCUS', 'allow'], ['cmd', 'appops', 'get', '{pkg}', 'TAKE_AUDIO_FOCUS'], 'allow')),
+            ('mic', 'Доступ к микрофону', 'Разрешите выбранному приложению записывать голос.', 'Разрешить микрофон', lambda: self.grant('android.permission.RECORD_AUDIO'), None, None),
+            ('eye', 'Поверх других окон', 'Разрешите небольшие окна приложения поверх экрана.', 'Разрешить поверх окон', lambda: self.app_command(['appops', 'set', '{pkg}', 'SYSTEM_ALERT_WINDOW', 'allow'], ['appops', 'get', '{pkg}', 'SYSTEM_ALERT_WINDOW'], 'allow'), None, None),
+            ('settings', 'Скрытые настройки', 'Дайте настройщикам и переназначателям кнопок расширенный доступ.', 'Дать доступ к настройкам', lambda: self.grant('android.permission.WRITE_SECURE_SETTINGS'), None, None),
+            ('shield', 'Работа в фоне', 'Помогите приложению работать при экономии энергии.', 'Не ограничивать в фоне', lambda: self.app_command(['dumpsys', 'deviceidle', 'whitelist', '+{pkg}'], ['dumpsys', 'deviceidle', 'whitelist'], '{pkg}'), None, None),
         ]
-        for i, (text, fn) in enumerate(actions): grid.addWidget(self.button(text, fn), i // 3, i % 3)
-        self.row(card, self.button('Отключить Doze', lambda: self.deviceidle('disable')), self.button('Включить Doze', lambda: self.deviceidle('enable')), 1)
-        card = self.card('Сеть и система'); grid = QGridLayout(); card.addLayout(grid)
-        features = [('Private DNS · AdGuard', 'dns'), ('Captive Portal', 'captive'), ('Immersive · Status bar', 'immersive')]
-        for row, (name, key) in enumerate(features):
-            label = QLabel(name); label.setMinimumWidth(170); grid.addWidget(label, row, 0)
-            grid.addWidget(self.button('Включить', lambda checked=False, k=key: self.setting_feature(k, True)), row, 1)
-            grid.addWidget(self.button('Выключить', lambda checked=False, k=key: self.setting_feature(k, False)), row, 2)
-            grid.addWidget(self.button('Восстановить', lambda checked=False, k=key: self.restore_feature(k)), row, 3)
-        self.row(card, self.button('Скрытые настройки Android', lambda: self.main.sequence(self.t('Скрытые настройки Android'), [Step(['am', 'start', '-a', 'android.settings.SETTINGS'])]) if self.main.ready() else None), 1)
-        card = self.card('Восстановление системы')
-        note = self.label('Системные сценарии используют Root, резервные копии и перезагрузку. Применимость зависит от прошивки.', 'subtitle'); note.setWordWrap(True); card.addWidget(note)
-        self.row(card,self.button('Починить настройки машины',lambda:self.repair('settings')),1)
-        self.row(card,self.button('Починить verity',lambda:self.repair('verity')),self.label('Отключение dm-verity — режим из отчёта'),1)
-        for button in card.parentWidget().findChildren(QPushButton):
-            if button.text() == self.t('Починить настройки машины'): button.setProperty('feature','repair.settings')
-            elif button.text() == self.t('Починить verity'): button.setProperty('feature','repair.verity')
-        self.row(card,self.button('Журнал восстановления',self.show_recovery),self.button('Возобновить Android после сбоя',self.recover_android),1)
-        self.log = logbox(); self.log.setMinimumHeight(190); self.layout.addWidget(self.log); self.layout.addStretch()
+        for icon, title, explanation, primary, callback, secondary, secondary_callback in definitions:
+            panel, box = self.tile(icon, title, explanation)
+            box.addWidget(self.action_button(primary, callback, 'tweaks.permissions', icon=icon, needs_package=True, help_key=explanation))
+            if secondary: box.addWidget(self.action_button(secondary, secondary_callback, 'tweaks.permissions', icon='undo', needs_package=True, help_key='Вернёт выбранному приложению возможность приостанавливать музыку, когда это нужно.'))
+            permissions.addWidget(panel)
+        panel, box = self.tile('shield', 'Режим экономии энергии', 'Управляйте общими ограничениями работы приложений в фоне.')
+        box.addWidget(self.action_button('Отключить экономию', lambda: self.deviceidle('disable'), 'tweaks.permissions', icon='shield', help_key='Снимет общие ограничения фоновой работы приложений. Это может увеличить расход энергии.'))
+        box.addWidget(self.action_button('Вернуть экономию', lambda: self.deviceidle('enable'), 'tweaks.permissions', icon='undo', help_key='Снова разрешит системе ограничивать приложения в фоне для экономии энергии.')); permissions.addWidget(panel)
+        card = self.card('Сеть и система', 'Полезные настройки интернета и внешнего вида. Для возврата сохранены прежние значения.')
+        network = ResponsiveGrid(min_card_width=280, max_columns=3); card.addWidget(network)
+        features = [
+            ('shield', 'Фильтр рекламы', 'Использует AdGuard для фильтрации сетевых адресов. Доступность зависит от сети.', 'dns', 'Включить фильтр', 'Выключить фильтр'),
+            ('wifi', 'Значок Wi-Fi без интернета', 'Можно убрать предупреждение, если сеть машины работает без доступа в интернет.', 'captive', 'Убрать предупреждение', 'Вернуть проверку'),
+            ('eye', 'Больше места на экране', 'Скрывает верхнюю панель системы, чтобы приложение занимало больше места.', 'immersive', 'Скрыть верхнюю панель', 'Вернуть верхнюю панель'),
+        ]
+        for icon, title, explanation, key, on, off in features:
+            panel, box = self.tile(icon, title, explanation)
+            box.addWidget(self.action_button(on, lambda checked=False, k=key: self.setting_feature(k, True), 'tweaks.network', icon=icon, help_key=explanation))
+            box.addWidget(self.action_button(off, lambda checked=False, k=key: self.setting_feature(k, False), 'tweaks.network', icon='undo', help_key='Вернёт обычное поведение этой функции.'))
+            restore = self.action_button('Восстановить прежнее значение', lambda checked=False, k=key: self.restore_feature(k), 'tweaks.network', icon='undo', help_key='Вернёт значение, которое было в машине до первого изменения через эту программу.')
+            restore.setProperty('restoreKey', key); box.addWidget(restore)
+            hint = self.label('Результат проверяется после изменения', 'subtitle'); hint.setWordWrap(True); box.addWidget(hint); network.addWidget(panel)
+        self.row(card, self.action_button('Открыть настройки Android', lambda: self.main.sequence(self.t('Скрытые настройки Android'), [Step(['am', 'start', '-a', 'android.settings.SETTINGS'])]) if self.main.ready() else None, 'tweaks.network', icon='settings', help_key='Откроет обычные настройки Android на экране машины. Доступные пункты зависят от прошивки.'))
+        card = self.card('Восстановление системы', 'Эти действия меняют системные файлы и перезагружают мультимедийную систему. Перед запуском вы увидите точное описание.')
+        repairs = ResponsiveGrid(min_card_width=300, max_columns=2); card.addWidget(repairs)
+        panel, box = self.tile('recovery', 'Починить настройки машины', 'Пересоздаёт базу настроек автомобиля. Сначала сохраняет резервную копию на компьютере; личные настройки могут сброситься.')
+        box.addWidget(self.action_button('Починить настройки машины', lambda: self.repair('settings'), 'repair.settings', icon='recovery', help_key='Сохранит настройки автомобиля на компьютере и пересоздаст их в машине. Личные настройки могут сброситься. Перед началом программа спросит подтверждение.')); repairs.addWidget(panel)
+        panel, box = self.tile('shield', 'Починить verity', 'Отключает проверку системного раздела по процедуре установщика. Требуется расширенный доступ и перезагрузка.')
+        box.addWidget(self.action_button('Починить verity', lambda: self.repair('verity'), 'repair.verity', icon='shield', help_key='Отключит проверку системных файлов по процедуре из отчёта и перезагрузит мультимедийную систему. Это не возвращает заводскую защиту.')); repairs.addWidget(panel)
+        self.row(card, self.button('Журнал восстановления', self.show_recovery, icon='info', help_key='Откроет сведения о выполненной или прерванной операции и сохранённых резервных копиях.'), self.action_button('Возобновить Android после сбоя', self.recover_android, 'repair.settings', icon='undo', help_key='Попытается вернуть систему в рабочее состояние после прерванного восстановления. Используется только для машины, указанной в журнале.'))
+        self.log = logbox(); self.log.hide(); self.layout.addStretch()
 
     def repair(self, kind):
         if not self.main.allowed('repair.'+kind) or not self.main.allowed('tweaks'): return
@@ -2428,10 +3398,16 @@ class TweaksPage(Page):
     def retranslate(self):
         super().retranslate()
         for i, text in enumerate(self.display_keys): self.display.setItemText(i, self.t(text))
+        self.update_profile(); self.update_actions()
 
     def update_profile(self):
         p = self.main.profile
-        self.display_info.setText(f'Android {p.release} / API {p.api}  ·  ABI: {", ".join(p.abis)}  ·  Displays: {p.displays}\n' + p.raw.get('density', ''))
+        if not self.main.target or not p.api:
+            self.display_info.setText(self.t('Параметры экранов ещё не проверены'))
+        else:
+            density = p.raw.get('density', '').strip()
+            self.display_info.setText('Android ' + str(p.release) + '  ·  ' + self.t('Доступные экраны') + ': ' + ', '.join(str(i) for i in p.displays) + ('\n' + density if density else ''))
+        self.update_actions()
 
     def selected_displays(self):
         mapping = self.main.display_map
@@ -2544,6 +3520,31 @@ class TweaksPage(Page):
                       Step(['settings', 'get', 'global', setting], validate=lambda r, v=value: r.text == ('null' if v is None else v))]
         self.main.sequence(self.t('Восстановить'), steps, lambda ok, r: append_log(self.log, feature + '\n' + '\n'.join(x.text for x in r) + '\n'))
 
+    def tile(self, icon_name, title, explanation):
+        frame = QFrame(); frame.setObjectName('card'); box = QVBoxLayout(frame); box.setContentsMargins(18, 18, 18, 18); box.setSpacing(12)
+        heading = QHBoxLayout(); icon = QLabel(); icon.setPixmap(ui_icon(icon_name).pixmap(26, 26)); heading.addWidget(icon); heading.addWidget(self.label(title, 'section'), 1); box.addLayout(heading)
+        description = self.label(explanation); description.setWordWrap(True); box.addWidget(description); box.addStretch(); return frame, box
+
+    def action_button(self, key, callback, feature, icon=None, accent=False, help_key=None, needs_package=False):
+        button = self.button(key, callback, accent, icon=icon, help_key=help_key); button.setProperty('feature', feature); button.setProperty('needsPackage', needs_package); self.action_buttons.append(button); return button
+
+    def update_actions(self):
+        if not hasattr(self, 'action_buttons'): return
+        base = bool(self.main.target and not self.main.busy and self.main.allowed('tweaks', False))
+        pkg_ok = bool(hasattr(self, 'package') and PACKAGE_RE.fullmatch(self.package.text().strip()))
+        for button in self.action_buttons:
+            feature = button.property('feature'); enabled = base and self.main.allowed(feature, False)
+            if button.property('needsPackage'): enabled = enabled and pkg_ok
+            if feature.startswith('repair.'):
+                enabled = enabled and self.main.allowed('device.root', False) and self.main.allowed('device.reboot', False)
+            restore = button.property('restoreKey')
+            if restore: enabled = enabled and (restore == 'immersive' or self.main.settings.contains(self.saved_key(restore)))
+            if feature == 'tweaks.dpi' and hasattr(self, 'display') and self.main.profile.api:
+                ids = self.selected_displays(); enabled = enabled and all(i in self.main.profile.displays for i in ids) and (self.main.profile.per_display or all(i == 0 for i in ids))
+            button.setEnabled(bool(enabled))
+        if hasattr(self, 'display'): self.display.setEnabled(not self.main.busy)
+        if hasattr(self, 'dpi'): self.dpi.setEnabled(not self.main.busy)
+
 def windows_argv(command: str) -> list[str]:
     if os.name != 'nt': return shlex.split(command)
     from ctypes import wintypes
@@ -2564,15 +3565,56 @@ class TerminalInput(QLineEdit):
         else: super().keyPressEvent(event)
 
 class TerminalPage(Page):
+
     def __init__(self, main):
         super().__init__(main); self.job = None; self.shell_job = None; self.history = json.loads(main.settings.value('terminal_history', '[]')); self.history_index = len(self.history)
-        card = self.card('Терминал ADB'); self.output = logbox(); self.output.setMinimumHeight(390); card.addWidget(self.output)
-        self.input = self.bind(TerminalInput(), 'Команда ADB или adb shell…', 'setPlaceholderText'); self.input.returnPressed.connect(self.run_command); self.input.history_move.connect(self.move_history)
-        self.run_button = self.button('Выполнить', self.run_command, True)
-        self.row(card, self.input, self.run_button, self.button('Стоп', self.stop))
-        self.shell_button = self.button('Интерактивная shell', self.open_shell)
-        self.row(card, self.shell_button, self.button('Очистить', self.output.clear), self.button('Сохранить', lambda: self.save_text(self.output.toPlainText(), 'voyah-terminal.txt')), 1)
-        self.layout.addStretch(); QShortcut(QKeySequence('Ctrl+L'), self, activated=self.output.clear)
+        card = self.card('Терминал ADB', 'Отправляйте свои команды и читайте ответы автомобиля. Используйте этот раздел, если понимаете, что делает команда.')
+        self.toolbar_layout = card; self.toolbar_frame = card.parentWidget(); self.toolbar_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.toolbar_title = card.itemAt(0).widget(); self.toolbar_description = card.itemAt(1).widget()
+        self.state_label = self.label('Готов к команде', 'subtitle'); card.addWidget(self.state_label)
+        self.shell_button = self.button('Интерактивное подключение', self.open_shell, icon='terminal', help_key='Откроет постоянное подключение для команд. Следующие строки отправляются прямо в автомобиль.')
+        self.stop_button = self.button('Остановить', self.stop, icon='stop', help_key='Прервёт выполняющуюся команду или закроет интерактивное подключение.')
+        self.more_button = self.button('Ещё', lambda: None, icon='more', help_key='Сохранение вывода и очистка окна терминала.')
+        self.more_menu = QMenu(self); self.clear_action = self.more_menu.addAction(ui_icon('delete'), self.t('Очистить вывод')); self.bind(self.clear_action, 'Очистить вывод'); self.clear_action.triggered.connect(self.output_clear)
+        self.save_action = self.more_menu.addAction(ui_icon('save'), self.t('Сохранить вывод')); self.bind(self.save_action, 'Сохранить вывод'); self.save_action.triggered.connect(lambda: self.save_text(self.output.toPlainText(), 'voyah-terminal.txt'))
+        self.more_menu.setToolTipsVisible(True); self.bind(self.clear_action, 'Уберёт текст из окна терминала. Команды и их история останутся.', 'setToolTip'); self.bind(self.save_action, 'Сохранит весь отображаемый вывод в текстовый файл на компьютере.', 'setToolTip')
+        self.more_button.setMenu(self.more_menu); actions = QHBoxLayout(); actions.setSpacing(8)
+        for button in (self.shell_button, self.stop_button, self.more_button): actions.addWidget(button)
+        actions.addStretch(1); card.addLayout(actions)
+        console = self.card('Ответы устройства'); self.output = logbox(); self.output.setMinimumHeight(120); self.bind(self.output, 'Здесь появятся команда и её результат. История команд доступна стрелками вверх и вниз.', 'setPlaceholderText'); console.addWidget(self.output, 1)
+        self.console_title = console.itemAt(0).widget(); console.setAlignment(Qt.AlignmentFlag(0)); console.parentWidget().setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding); self.output.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.input = self.bind(TerminalInput(), 'Введите adb … или adb shell …', 'setPlaceholderText'); self.input.returnPressed.connect(self.run_command); self.input.history_move.connect(self.move_history); self.input.textChanged.connect(self.update_actions)
+        self.bind(self.input, 'Введите команду и нажмите Enter. Стрелки вверх и вниз выбирают предыдущие команды.', 'setToolTip'); self.input.setProperty('feature', 'terminal')
+        self.run_button = self.button('Выполнить', self.run_command, True, icon='play', help_key='Отправит введённую команду. Ответ появится в окне выше.')
+        command = QHBoxLayout(); command.setSpacing(12); command.addWidget(self.input, 1); command.addWidget(self.run_button); console.addLayout(command)
+        self.command_note = self.hint('Для команды, обращающейся к автомобилю, сначала выберите подключённое устройство. Команды вроде adb devices работают и без него.'); console.addWidget(self.command_note)
+        self.layout.setStretch(self.layout.count() - 1, 1); QShortcut(QKeySequence('Ctrl+L'), self, activated=self.output_clear); self.update_actions()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event); self.adapt_layout()
+
+    def adapt_layout(self):
+        if not hasattr(self, 'command_note'): return
+        compact = self.height() < 500 or self.width() < 820
+        self.toolbar_title.setVisible(not compact); self.toolbar_description.setVisible(not compact)
+        self.state_label.setVisible(not compact); self.console_title.setVisible(not compact); self.command_note.setVisible(not compact)
+        self.toolbar_layout.invalidate()
+        height = self.toolbar_layout.heightForWidth(max(1, self.width())) if self.toolbar_layout.hasHeightForWidth() else self.toolbar_layout.minimumSize().height()
+        self.toolbar_frame.setMinimumHeight(max(0, height)); self.toolbar_frame.updateGeometry()
+
+    def output_clear(self):
+        self.output.clear()
+
+    def update_actions(self):
+        allowed = self.main.allowed('terminal', False); shell = self.shell_job is not None; running = self.job is not None
+        self.input.setEnabled(allowed and (shell or not self.main.busy)); self.run_button.setEnabled(allowed and bool(self.input.text().strip()) and not running and (shell or not self.main.busy))
+        self.stop_button.setEnabled(running or shell); self.shell_button.setEnabled((shell or bool(self.main.target)) and not running and (shell or not self.main.busy) and allowed)
+        self.shell_button.setText(self.t('Закрыть подключение' if shell else 'Интерактивное подключение')); self.shell_button.setIcon(ui_icon('stop' if shell else 'terminal'))
+        self.run_button.setText(self.t('Отправить' if shell else 'Выполнить'))
+        self.state_label.setText(self.t('Постоянное подключение открыто' if shell else 'Команда выполняется…' if running else 'Готов к команде'))
+
+    def retranslate(self):
+        super().retranslate(); self.update_actions(); self.adapt_layout()
 
     def move_history(self, direction):
         self.history_index = max(0, min(len(self.history), self.history_index + direction))
@@ -2622,9 +3664,9 @@ class TerminalPage(Page):
         if not self.main.begin(self.t('Терминал ADB')): return
         def done(result):
             self.job = None; self.main.end(result.ok)
-            append_log(self.output, '\n[' + (self.t('Отменено') if result.cancelled else self.t('Истекло время ожидания') if result.timed_out else f'exit {result.code}') + ']\n')
+            self.update_actions(); append_log(self.output, '\n[' + (self.t('Отменено') if result.cancelled else self.t('Истекло время ожидания') if result.timed_out else f'exit {result.code}') + ']\n')
         self.job = self.main.adb(tokens, done, global_cmd=global_cmd, timeout=0, stream=lambda value: append_log(self.output, value), check=False)
-        self.main.active_job = self.job
+        self.main.active_job = self.job; self.update_actions()
 
     @feature_required('terminal')
     def open_shell(self):
@@ -2633,12 +3675,13 @@ class TerminalPage(Page):
         self.record('adb shell'); self.shell_button.setText(self.t('Стоп')); self.run_button.setText(self.t('Отправить'))
         def ended(result):
             self.shell_job = None; self.shell_button.setText(self.t('Интерактивная shell')); self.run_button.setText(self.t('Выполнить'))
-            append_log(self.output, '\n[exit ' + str(result.code) + ']\n')
-        self.shell_job = self.main.adb(['shell'], ended, timeout=0, stream=lambda value: append_log(self.output, value), check=False)
+            append_log(self.output, '\n[exit ' + str(result.code) + ']\n'); self.update_actions()
+        self.shell_job = self.main.adb(['shell'], ended, timeout=0, stream=lambda value: append_log(self.output, value), check=False); self.update_actions()
 
     def stop(self):
         if self.job: self.job.cancel(); self.job = None
         if self.shell_job: self.shell_job.cancel(); self.shell_job = None
+        self.update_actions()
 
     def stop_streams(self): self.stop()
 
@@ -2727,36 +3770,89 @@ class DownloadService(QObject):
 
 class CatalogPage(Page):
     def __init__(self, main):
-        super().__init__(main); self.items = []; self.downloader = DownloadService(main); self.service = InstallService(main); self.versions = {}; self.version_pending = set()
-        card = self.card('Каталог приложений'); self.status = QLabel(); self.status.setWordWrap(True); card.addWidget(self.status)
-        self.search = self.edit('Поиск приложений'); self.search.textChanged.connect(self.refresh)
-        self.row(card,self.search,self.button('Обновить каталог',lambda: main.catalog.refresh()))
-        self.listing = table([self.t(k) for k in ('Приложение','Совместимость','Версия')]); self.listing.setMinimumHeight(220); self.listing.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch); card.addWidget(self.listing)
-        self.details = QLabel(); self.details.setWordWrap(True); self.details.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); card.addWidget(self.details)
-        self.listing.itemSelectionChanged.connect(self.show_details)
-        self.install_btn = self.button('Скачать и установить',self.install,True); self.row(card,self.install_btn,1)
-        self.log = logbox(); self.log.setMinimumHeight(130); self.layout.addWidget(self.log)
-        self.service.log_message.connect(lambda text: append_log(self.log,text)); self.service.finished.connect(lambda ok:self.refresh())
-        main.catalog.changed.connect(self.refresh); self.refresh()
+        super().__init__(main)
+        self.items = []; self.downloader = DownloadService(main); self.service = InstallService(main)
+        self.versions = {}; self.version_pending = set(); self.selected_id = ''; self.card_widgets = {}; self.version_labels = {}
+        card = self.card('Каталог приложений', 'Выберите готовое приложение. Программа скачает его и установит в машину.')
+        row = QHBoxLayout(); row.setSpacing(12)
+        self.search = self.edit('Поиск приложений'); self.search.textChanged.connect(self.refresh); row.addWidget(self.search, 1)
+        row.addWidget(self.button('Обновить каталог', lambda: main.catalog.refresh(), icon='undo', help_key='Загрузить свежий список приложений. Уже скачанные файлы останутся на компьютере.'))
+        card.addLayout(row)
+        self.status = QLabel(); self.status.setObjectName('subtitle'); self.status.setWordWrap(True); self.status.setTextFormat(Qt.TextFormat.PlainText); card.addWidget(self.status)
+        self.listing = table([self.t(k) for k in ('Приложение', 'Совместимость', 'Версия')]); self.listing.hide()
+        self.listing.setParent(self); self.listing.itemSelectionChanged.connect(self.show_details)
+        self.catalog_grid = ResponsiveGrid(min_card_width=280, max_columns=3); self.catalog_host = self.catalog_grid; card.addWidget(self.catalog_host)
+        self.empty = EmptyState('Каталог пока пуст', 'Администратор ещё не добавил приложения. Когда они появятся, вы сможете выбрать и установить нужное.', icon='apps'); card.addWidget(self.empty)
+        detail_card = self.card('Выбранное приложение')
+        self.selection_name = QLabel(); self.selection_name.setObjectName('section'); self.selection_name.setWordWrap(True); self.selection_name.setTextFormat(Qt.TextFormat.PlainText); detail_card.addWidget(self.selection_name)
+        self.details = QLabel(); self.details.setWordWrap(True); self.details.setTextFormat(Qt.TextFormat.PlainText); self.details.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); detail_card.addWidget(self.details)
+        self.selection_status = QLabel(); self.selection_status.setObjectName('subtitle'); self.selection_status.setWordWrap(True); detail_card.addWidget(self.selection_status)
+        self.install_btn = self.button('Скачать и установить', self.install, True, icon='download', help_key='Скачает выбранное приложение, проверит его и установит в подключённую машину. Дождитесь сообщения о завершении.')
+        self.install_btn.setProperty('feature', 'apk.install'); self.row(detail_card, self.install_btn)
+        self.log = logbox(); self.log.hide()
+        self.service.log_message.connect(lambda text: append_log(self.log, text))
+        self.service.finished.connect(lambda ok: self.refresh())
+        main.catalog.changed.connect(self.refresh); self.refresh(); self.layout.addStretch()
+
     def retranslate(self):
-        super().retranslate(); self.listing.setHorizontalHeaderLabels([self.t(k) for k in ('Приложение','Совместимость','Версия')]); self.refresh()
+        super().retranslate(); self.listing.setHorizontalHeaderLabels([self.t(k) for k in ('Приложение', 'Совместимость', 'Версия')]); self.refresh()
+
     def refresh(self):
-        store = self.main.catalog; self.status.setText(self.t(store.message or ('Каталог ещё не настроен' if not store.config.get('repository') else 'Последний сохранённый каталог')) + f"  ·  r{store.profile['revision']}")
-        term = self.search.text().lower(); self.items = [a for a in store.profile['apps'] if term in (a['name'] + ' ' + a.get('description','')).lower()]
-        self.listing.setRowCount(len(self.items))
-        for row,entry in enumerate(self.items):
-            compatible = self.t('Отключено администратором') if not entry.get('enabled',True) else f"API ≥ {entry.get('min_sdk',1)} · {', '.join(entry.get('abis',[])) or 'Android'}"
-            key = hashlib.sha256((entry['source']+'\n'+entry.get('asset','')).encode()).hexdigest(); version = self.versions.get(entry['source'],self.downloader.index.get(key,{}).get('version',self.t('Определяется перед загрузкой')))
-            for col,value in enumerate((entry['name'],compatible,version)): self.listing.setItem(row,col,QTableWidgetItem(value))
+        store = self.main.catalog
+        old_row = self.listing.currentRow()
+        chosen = self.items[old_row]['id'] if 0 <= old_row < len(self.items) else self.selected_id
+        term = self.search.text().strip().casefold()
+        self.items = [a for a in store.profile['apps'] if term in (a['name'] + ' ' + a.get('description', '')).casefold()]
+        self.status.setText(self.t(store.message or ('Каталог ещё не настроен' if not store.config.get('repository') else 'Последний сохранённый каталог')) + f"  ·  r{store.profile['revision']}")
+        self.listing.blockSignals(True); self.listing.setRowCount(len(self.items))
+        while self.catalog_grid.count():
+            item = self.catalog_grid.takeAt(0)
+            if item and item.widget(): item.widget().deleteLater()
+        self.card_widgets = {}; self.version_labels = {}
+        for row, entry in enumerate(self.items):
+            key = hashlib.sha256((entry['source'] + '\n' + entry.get('asset', '')).encode()).hexdigest()
+            known = self.versions.get(entry['source'], self.downloader.index.get(key, {}).get('version', ''))
+            version = str(known) if known else self.t('Версия будет проверена перед загрузкой')
+            compatible = self.compatibility_text(entry)
+            for col, value in enumerate((entry['name'], compatible, version)): self.listing.setItem(row, col, QTableWidgetItem(value))
+            frame = QFrame(); frame.setObjectName('catalogCard'); frame.setProperty('selected', False)
+            box = QVBoxLayout(frame); box.setContentsMargins(18, 18, 18, 18); box.setSpacing(12)
+            heading = QHBoxLayout(); icon = QLabel(); icon.setPixmap(ui_icon('apps').pixmap(28, 28)); heading.addWidget(icon)
+            title = QLabel(entry['name']); title.setObjectName('section'); title.setTextFormat(Qt.TextFormat.PlainText); title.setWordWrap(True); heading.addWidget(title, 1); box.addLayout(heading)
+            description = QLabel(entry.get('description', '') or self.t('Готовое приложение для вашей машины.')); description.setTextFormat(Qt.TextFormat.PlainText); description.setWordWrap(True); box.addWidget(description)
+            badge = QLabel(compatible); badge.setObjectName('subtitle'); badge.setWordWrap(True); box.addWidget(badge)
+            version_label = QLabel(version); version_label.setObjectName('subtitle'); version_label.setWordWrap(True); box.addWidget(version_label)
+            source = QLabel(urlparse(entry['source']).netloc); source.setObjectName('eyebrow'); source.setToolTip(entry['source']); box.addWidget(source); box.addStretch()
+            choose = QPushButton(self.t('Выбрать приложение')); choose.setIcon(ui_icon('check')); choose.setAccessibleName(self.t('Выбрать приложение') + ': ' + entry['name'])
+            choose.clicked.connect(lambda checked=False, app_id=entry['id']: self.select_app(app_id)); box.addWidget(choose)
+            self.card_widgets[entry['id']] = frame; self.version_labels[entry['id']] = version_label; self.catalog_grid.addWidget(frame)
+        row = next((i for i, entry in enumerate(self.items) if entry['id'] == chosen), -1)
+        if row < 0 and self.items and not term: row = 0
+        self.listing.clearSelection()
+        if row >= 0: self.listing.setCurrentCell(row, 0); self.listing.selectRow(row)
+        else: self.listing.setCurrentCell(-1, -1)
+        self.listing.blockSignals(False)
+        self.catalog_host.setVisible(bool(self.items)); self.empty.setVisible(not self.items)
+        if not self.items:
+            if term:
+                title, description = 'Ничего не найдено', 'Попробуйте другое название или очистите строку поиска.'
+            elif not store.config.get('repository'):
+                title, description = 'Каталог ещё не настроен', 'Администратору нужно указать адрес каталога. Пока можно устанавливать APK с компьютера.'
+            else:
+                title, description = 'Каталог пока пуст', 'Администратор ещё не добавил приложения. Когда они появятся, вы сможете выбрать и установить нужное.'
+            self.empty.title.setText(self.t(title)); self.empty.description.setText(self.t(description))
         self.show_details()
+
     def show_details(self):
         row = self.listing.currentRow()
-        if hasattr(self,'install_btn'):
-            enabled = 0 <= row < len(self.items) and self.items[row].get('enabled',True) and self.main.allowed('apk.install',False) and self.main.allowed('catalog',False)
-            self.install_btn.setEnabled(enabled)
-        if 0 <= row < len(self.items):
-            item = self.items[row]; self.details.setText(item.get('description','') + '\n' + item['source'])
-            source = item['source']
+        selected = self.items[row] if 0 <= row < len(self.items) else None
+        self.selected_id = selected['id'] if selected else ''
+        for app_id, frame in self.card_widgets.items():
+            frame.setProperty('selected', app_id == self.selected_id); frame.style().unpolish(frame); frame.style().polish(frame); frame.update()
+        if selected:
+            self.selection_name.setText(selected['name']); self.details.setText(selected.get('description', '') + '\n' + selected['source'])
+            self.selection_status.setText(self.compatibility_text(selected))
+            source = selected['source']
             try: endpoint = release_endpoint(source)
             except ValueError: endpoint = None
             if endpoint and source not in self.versions and source not in self.version_pending:
@@ -2764,12 +3860,18 @@ class CatalogPage(Page):
                 def peeked(result):
                     self.version_pending.discard(source)
                     if result['error']: return
-                    try: self.versions[source] = json.loads(result['body'])['tag_name']
-                    except (ValueError,KeyError): return
-                    for index,entry in enumerate(self.items):
-                        if entry['source'] == source: self.listing.item(index,2).setText(self.versions[source])
-                self.main.web.request(endpoint,peeked)
-        else: self.details.setText(self.t('Выберите приложение из каталога.'))
+                    try: version = str(json.loads(result['body'])['tag_name'])
+                    except (ValueError, KeyError): return
+                    self.versions[source] = version
+                    for index, entry in enumerate(self.items):
+                        if entry['source'] == source:
+                            self.listing.item(index, 2).setText(version)
+                            if entry['id'] in self.version_labels: self.version_labels[entry['id']].setText(version)
+                self.main.web.request(endpoint, peeked)
+        else:
+            self.selection_name.setText(self.t('Выберите приложение')); self.details.setText(self.t('Нажмите «Выбрать приложение» на карточке выше.')); self.selection_status.clear()
+        self.update_actions()
+
     @feature_required('apk.install','catalog')
     def install(self):
         if not self.main.ready(): return
@@ -2788,24 +3890,80 @@ class CatalogPage(Page):
             self.service.start([path],2 if path.suffix != '.apk' else 0,target=target,expected_package=entry.get('package',''),post_install=entry.get('post_install',[]))
         self.downloader.acquire(entry['source'],ready,entry.get('asset',''))
 
+    def compatibility_text(self, entry):
+        if not entry.get('enabled', True): return self.t('Отключено администратором')
+        profile = self.main.profile
+        if profile.api and entry.get('min_sdk', 1) > profile.api: return self.t('Нужна более новая версия Android')
+        if entry.get('abis') and profile.abis and not set(entry['abis']).intersection(profile.abis): return self.t('Не подходит подключённой машине')
+        if not self.main.target: return self.t('Совместимость проверим после подключения')
+        if not profile.api: return self.t('Проверяем параметры машины…')
+        return self.t('Первичная проверка пройдена; APK проверим перед установкой')
+
+    def select_app(self, app_id):
+        row = next((i for i, entry in enumerate(self.items) if entry['id'] == app_id), -1)
+        if row >= 0: self.listing.setCurrentCell(row, 0); self.listing.selectRow(row); self.show_details()
+
+    def update_actions(self):
+        if not hasattr(self, 'install_btn'): return
+        row = self.listing.currentRow(); selected = self.items[row] if 0 <= row < len(self.items) else None
+        allowed = self.main.allowed('apk.install', False) and self.main.allowed('catalog', False)
+        compatible = bool(selected and selected.get('enabled', True))
+        if selected and self.main.profile.api: compatible = compatible and selected.get('min_sdk', 1) <= self.main.profile.api
+        if selected and selected.get('abis') and self.main.profile.abis: compatible = compatible and bool(set(selected['abis']).intersection(self.main.profile.abis))
+        self.install_btn.setEnabled(bool(allowed and compatible and self.main.target and self.main.profile.api and not self.main.busy))
+
 class KeyboardPage(Page):
     def __init__(self, main):
         super().__init__(main); self.downloader = DownloadService(main); self.items = []
-        card = self.card('Клавиатуры'); note = self.label('Комплект заменяет системные клавиатуры двух экранов. Перед изменениями создаются резервные копии на ГУ и ПК.'); note.setWordWrap(True); card.addWidget(note)
-        self.combo = QComboBox(); self.row(card,self.combo,self.button('Обновить каталог',lambda:main.catalog.refresh()))
-        self.description = QLabel(); self.description.setWordWrap(True); card.addWidget(self.description); self.combo.currentIndexChanged.connect(self.describe)
-        self.row(card,self.button('Скачать и установить комплект',self.install,True),1)
-        self.row(card,self.button('Восстановить штатные клавиатуры',self.restore),1)
-        self.log = logbox(); self.log.setMinimumHeight(250); self.layout.addWidget(self.log); self.layout.addStretch()
-        main.catalog.changed.connect(self.refresh); self.refresh()
+        card = self.card('Клавиатуры', 'Один комплект обновляет клавиатуры центрального и пассажирского экранов.')
+        self.row(card, self.hint('Выберите комплект из списка. До установки программа проверит оба файла и сохранит штатные клавиатуры.'))
+        row = QHBoxLayout(); row.setSpacing(12)
+        self.combo = QComboBox(); self.combo.setMinimumContentsLength(20); self.combo.currentIndexChanged.connect(self.describe); row.addWidget(self.combo, 1)
+        row.addWidget(self.button('Обновить каталог', lambda: main.catalog.refresh(), icon='undo', help_key='Получить актуальный список клавиатур, который опубликовал администратор.')); card.addLayout(row)
+        self.empty = EmptyState('Комплектов пока нет', 'Администратор ещё не добавил ссылки на клавиатуры. Штатные клавиатуры можно восстановить отдельно.', icon='keyboard'); card.addWidget(self.empty)
+        self.description = QLabel(); self.description.setTextFormat(Qt.TextFormat.PlainText); self.description.setWordWrap(True); card.addWidget(self.description)
+        self.compatibility = QLabel(); self.compatibility.setObjectName('subtitle'); self.compatibility.setWordWrap(True); card.addWidget(self.compatibility)
+        screens = ResponsiveGrid(min_card_width=260, max_columns=2); card.addWidget(screens)
+        self.screen_panels = []
+        for title, explanation in [('Центральный экран', 'Клавиатура для ввода на основном экране автомобиля.'), ('Пассажирский экран', 'Клавиатура для ввода на экране переднего пассажира.')]:
+            panel = QFrame(); panel.setObjectName('card'); box = QVBoxLayout(panel); box.setContentsMargins(18, 18, 18, 18); box.setSpacing(12)
+            icon = QLabel(); icon.setPixmap(ui_icon('monitor').pixmap(30, 30)); box.addWidget(icon); box.addWidget(self.label(title, 'section'))
+            description = self.label(explanation); description.setWordWrap(True); box.addWidget(description)
+            note = self.label('Оба файла будут проверены перед установкой', 'subtitle'); note.setWordWrap(True); box.addWidget(note)
+            screens.addWidget(panel); self.screen_panels.append(panel)
+        self.install_btn = self.button('Скачать и установить комплект', self.install, True, icon='download', help_key='Скачает две клавиатуры, сохранит текущие файлы и заменит их. Машина перезагрузит мультимедийную систему. Перед началом вы увидите подтверждение.')
+        self.install_btn.setProperty('feature', 'keyboard.install'); self.row(card, self.install_btn)
+        backup = self.card('Штатные клавиатуры и резервные копии', 'Старые файлы сохраняются в машине и дополнительно на компьютере. Уже существующие штатные копии не перезаписываются.')
+        self.restore_btn = self.button('Восстановить штатные клавиатуры', self.restore, icon='undo', help_key='Вернёт сохранённые штатные клавиатуры для обоих экранов. Текущие файлы тоже будут сохранены на компьютере перед заменой.')
+        self.restore_btn.setProperty('feature', 'keyboard.restore'); self.row(backup, self.restore_btn)
+        note = self.label('Установка и восстановление требуют расширенного доступа. Программа спросит подтверждение и покажет все этапы в журнале.', 'subtitle'); note.setWordWrap(True); backup.addWidget(note)
+        self.log = logbox(); self.log.hide(); main.catalog.changed.connect(self.refresh); self.refresh(); self.layout.addStretch()
+
     def refresh(self):
-        self.items = self.main.catalog.profile['keyboards']; self.combo.clear()
-        for entry in self.items: self.combo.addItem(entry['name'])
-        self.describe()
-    def retranslate(self): super().retranslate(); self.describe()
+        index = self.combo.currentIndex(); old_id = self.items[index]['id'] if 0 <= index < len(self.items) else ''
+        self.items = self.main.catalog.profile['keyboards']; self.combo.blockSignals(True); self.combo.clear()
+        for entry in self.items: self.combo.addItem(entry['name'], entry['id'])
+        chosen = next((i for i, entry in enumerate(self.items) if entry['id'] == old_id), 0 if self.items else -1)
+        self.combo.setCurrentIndex(chosen); self.combo.blockSignals(False); self.describe()
+
+    def retranslate(self):
+        super().retranslate(); self.empty.title.setText(self.t('Комплектов пока нет')); self.empty.description.setText(self.t('Администратор ещё не добавил ссылки на клавиатуры. Штатные клавиатуры можно восстановить отдельно.')); self.describe()
+
     def describe(self):
-        index = self.combo.currentIndex()
-        self.description.setText((self.items[index].get('description','') + '\n' + ', '.join(self.items[index].get('models',KEYBOARD_MODELS))) if index >= 0 else self.t('Комплекты пока не добавлены администратором.'))
+        index = self.combo.currentIndex(); entry = self.items[index] if 0 <= index < len(self.items) else None
+        self.empty.setVisible(not self.items); self.combo.setVisible(bool(self.items))
+        self.description.setVisible(bool(entry)); self.compatibility.setVisible(bool(entry))
+        for panel in self.screen_panels: panel.setVisible(bool(entry))
+        self.description.setText(entry.get('description', '') if entry else '')
+        if entry:
+            models = entry.get('models', KEYBOARD_MODELS)
+            if not entry.get('enabled', True): text = self.t('Отключено администратором')
+            elif not self.main.target: text = self.t('Подключите машину, чтобы проверить совместимость')
+            elif self.main.profile.model_code not in models: text = self.t('Этот комплект не подходит подключённой машине')
+            else: text = self.t('Модель поддерживается. Оба файла проверим перед заменой.')
+            self.compatibility.setText(text)
+        self.update_actions()
+
     @feature_required('keyboard.install','keyboards')
     def install(self):
         if not self.main.ready(): return
@@ -2827,9 +3985,20 @@ class KeyboardPage(Page):
                 paths.append(path); acquire(index+1)
             self.downloader.acquire(entry[key+'_url'],downloaded,digest=entry.get(key+'_sha256',''))
         acquire()
+
     @feature_required('keyboard.restore','keyboards')
     def restore(self):
         self.main.recipe = SystemRecipe(self.main,'keyboard_restore'); self.main.recipe.start()
+
+    def update_actions(self):
+        if not hasattr(self, 'install_btn'): return
+        base = bool(self.main.target and not self.main.busy and self.main.allowed('keyboards', False) and self.main.allowed('device.root', False) and self.main.allowed('device.reboot', False))
+        index = self.combo.currentIndex(); entry = self.items[index] if 0 <= index < len(self.items) else None
+        model_ok = self.main.profile.model_code in KEYBOARD_MODELS
+        install_ok = bool(entry and entry.get('enabled', True) and self.main.profile.model_code in entry.get('models', KEYBOARD_MODELS))
+        self.combo.setEnabled(bool(self.items) and not self.main.busy)
+        self.install_btn.setEnabled(base and install_ok and self.main.allowed('keyboard.install', False))
+        self.restore_btn.setEnabled(base and model_ok and self.main.allowed('keyboard.restore', False))
 
 class SystemRecipe(QObject):
     """Pinned-device state machine. Fixed paths only; cleanup runs even after cancellation."""
@@ -3093,9 +4262,16 @@ class SystemRecipe(QObject):
 
 class AdminLogin(QDialog):
     def __init__(self, main):
-        super().__init__(main); self.main = main; self.setWindowTitle(main.t('Вход администратора')); self.setMinimumWidth(370)
-        layout = QVBoxLayout(self); layout.addWidget(QLabel(main.t('Введите секретный код'))); self.code = QLineEdit(); self.code.setEchoMode(QLineEdit.EchoMode.Password); self.code.setMaxLength(128); layout.addWidget(self.code)
-        self.status = QLabel(); layout.addWidget(self.status); self.submit = QPushButton(main.t('Войти')); layout.addWidget(self.submit); self.submit.clicked.connect(self.verify); self.code.returnPressed.connect(self.verify); self.attempts = 0
+        super().__init__(main); self.main = main; self.setWindowTitle(main.t('Вход администратора')); self.setMinimumWidth(360); self.resize(440, 330)
+        layout = QVBoxLayout(self); layout.setContentsMargins(28, 24, 28, 24); layout.setSpacing(16)
+        icon = QLabel(); icon.setPixmap(ui_icon('shield').pixmap(40, 40)); layout.addWidget(icon)
+        title = QLabel(main.t('Вход администратора')); title.setObjectName('section'); layout.addWidget(title)
+        note = QLabel(main.t('Управляйте доступными функциями, приложениями и клавиатурами. Введите секретный код, чтобы продолжить.')); note.setWordWrap(True); note.setObjectName('subtitle'); layout.addWidget(note)
+        self.code = QLineEdit(); self.code.setEchoMode(QLineEdit.EchoMode.Password); self.code.setMaxLength(128); self.code.setPlaceholderText(main.t('Секретный код')); self.code.setAccessibleName(main.t('Секретный код')); layout.addWidget(self.code)
+        self.status = QLabel(); self.status.setWordWrap(True); self.status.setObjectName('dangerText'); layout.addWidget(self.status)
+        self.submit = QPushButton(main.t('Войти')); self.submit.setIcon(ui_icon('shield')); self.submit.setProperty('accent', True); layout.addWidget(self.submit); self.submit.clicked.connect(self.verify); self.code.returnPressed.connect(self.verify); self.attempts = 0
+        self.code.setFocus()
+
     def verify(self):
         if not self.submit.isEnabled(): return
         code = self.code.text(); self.code.clear(); self.submit.setEnabled(False)
@@ -3107,30 +4283,39 @@ class AdminLogin(QDialog):
 
 class CatalogEntryDialog(QDialog):
     def __init__(self, main, kind, entry=None):
-        super().__init__(main); self.main = main; self.kind = kind; self.entry = copy.deepcopy(entry or {}); self.setWindowTitle(main.t('Запись каталога')); self.resize(650,530)
-        outer = QVBoxLayout(self); form = QFormLayout(); outer.addLayout(form); self.fields = {}
-        keys = [('id','Постоянный ID'),('name','Название'),('description','Описание')]
-        keys += [('source','Ссылка GitHub / APK'),('asset','Имя файла релиза'),('package','Android-пакет')] if kind == 'apps' else [('central_url','APK центрального экрана'),('passenger_url','APK пассажирского экрана')]
-        for key,label in keys:
-            field = QLineEdit(str(self.entry.get(key,''))); self.fields[key] = field; form.addRow(main.t(label),field)
-        self.enabled = QCheckBox(main.t('Доступно пользователям')); self.enabled.setChecked(self.entry.get('enabled',True)); form.addRow(self.enabled)
-        self.sdk = QSpinBox(); self.sdk.setRange(1,1000); self.sdk.setValue(self.entry.get('min_sdk',24 if kind == 'keyboards' else 1)); form.addRow('minSdk',self.sdk)
-        self.extra = QCheckBox(main.t('Разрешить установку приложений (REQUEST_INSTALL_PACKAGES)')); self.extra.setChecked('request_install_packages' in self.entry.get('post_install',[]))
+        super().__init__(main); self.main = main; self.kind = kind; self.entry = copy.deepcopy(entry or {}); self.setWindowTitle(main.t('Запись каталога'))
+        available = QApplication.primaryScreen().availableGeometry(); self.resize(min(720, available.width() - 64), min(800, available.height() - 64))
+        outer = QVBoxLayout(self); outer.setContentsMargins(24, 24, 24, 24); outer.setSpacing(16)
+        title = QLabel(main.t('Приложение каталога' if kind == 'apps' else 'Комплект клавиатур')); title.setObjectName('section'); outer.addWidget(title)
+        note = QLabel(main.t('Пользователи увидят название и описание. Ссылки нужны программе для скачивания файлов.')); note.setObjectName('subtitle'); note.setWordWrap(True); outer.addWidget(note)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame); body = QWidget(); form = QFormLayout(body); form.setContentsMargins(0, 0, 8, 0); form.setSpacing(14); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow); form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows); scroll.setWidget(body); outer.addWidget(scroll, 1)
+        self.fields = {}
+        keys = [('id', 'Постоянный ID'), ('name', 'Название'), ('description', 'Описание')]
+        keys += [('source', 'Ссылка GitHub / APK'), ('asset', 'Имя файла релиза'), ('package', 'Android-пакет')] if kind == 'apps' else [('central_url', 'APK центрального экрана'), ('passenger_url', 'APK пассажирского экрана')]
+        helps = {'id':'Короткое постоянное имя записи. Не меняйте его после публикации, чтобы программа узнавала приложение.', 'name':'Название, которое пользователь увидит в каталоге.', 'description':'Коротко расскажите, для чего нужно приложение или комплект.', 'source':'Вставьте ссылку на GitHub, страницу выпуска или файл для скачивания.', 'asset':'Необязательно: точное имя нужного файла, если в выпуске их несколько.', 'package':'Необязательно: внутренний адрес приложения для дополнительной проверки скачанного файла.', 'central_url':'Ссылка на клавиатуру основного экрана автомобиля.', 'passenger_url':'Ссылка на клавиатуру экрана переднего пассажира.'}
+        for key, label in keys:
+            field = QLineEdit(str(self.entry.get(key, ''))); field.setToolTip(main.t(helps[key])); self.fields[key] = field; form.addRow(main.t(label), field)
+        self.enabled = QCheckBox(main.t('Доступно пользователям')); self.enabled.setChecked(self.entry.get('enabled', True)); self.enabled.setToolTip(main.t('Выключенная запись останется в каталоге, но установить её будет нельзя.')); form.addRow(self.enabled)
+        self.sdk = QSpinBox(); self.sdk.setRange(1, 1000); self.sdk.setValue(self.entry.get('min_sdk', 24 if kind == 'keyboards' else 1)); self.sdk.setToolTip(main.t('Минимальное поколение Android, которое поддерживает файл. Программа проверит это перед установкой.')); form.addRow(main.t('Минимальный Android (API)'), self.sdk)
+        self.extra = QCheckBox(main.t('Разрешить приложению устанавливать другие приложения')); self.extra.setChecked('request_install_packages' in self.entry.get('post_install', [])); self.extra.setToolTip(main.t('Нужно магазинам приложений. Выдаёт дополнительное разрешение после успешной установки.'))
         if kind == 'apps': form.addRow(self.extra)
         else:
-            note = QLabel(', '.join(KEYBOARD_MODELS) + '\ncom.qinggan.app.qgime / com.qinggan.app.qgime.second'); note.setWordWrap(True); form.addRow(note)
+            note = QLabel(main.t('Поддерживаемые модели') + ': ' + ', '.join(KEYBOARD_MODELS) + '\ncom.qinggan.app.qgime / com.qinggan.app.qgime.second'); note.setObjectName('subtitle'); note.setWordWrap(True); form.addRow(note)
         self.status = QLabel(); self.status.setWordWrap(True); outer.addWidget(self.status)
-        check = QPushButton(main.t('Проверить ссылки')); check.clicked.connect(self.check_links); outer.addWidget(check)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); buttons.accepted.connect(self.save); buttons.rejected.connect(self.reject); outer.addWidget(buttons)
+        check = QPushButton(main.t('Проверить ссылки')); check.setIcon(ui_icon('check')); check.clicked.connect(self.check_links); outer.addWidget(check)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); buttons.button(QDialogButtonBox.StandardButton.Save).setText(main.t('Сохранить')); buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(main.t('Отмена')); buttons.accepted.connect(self.save); buttons.rejected.connect(self.reject); outer.addWidget(buttons)
+
     def value(self):
         item = dict(self.entry); item.update({key:w.text().strip() for key,w in self.fields.items()}); item['enabled'] = self.enabled.isChecked(); item['min_sdk'] = self.sdk.value()
         if self.kind == 'apps': item['post_install'] = ['request_install_packages'] if self.extra.isChecked() else []
         else: item['models'] = item.get('models',list(KEYBOARD_MODELS))
         return item
+
     def save(self):
         try:
             profile = default_catalog(); profile[self.kind] = [self.value()]; validate_catalog(profile); self.accept()
         except ValueError as error: self.status.setText(self.main.t(str(error)))
+
     def check_links(self):
         urls = [self.fields[key].text().strip() for key in (('source',) if self.kind == 'apps' else ('central_url','passenger_url'))]
         self.checker = DownloadService(self.main); self.results = []
@@ -3145,38 +4330,84 @@ class CatalogEntryDialog(QDialog):
 
 class AdminDialog(QDialog):
     def __init__(self, main):
-        super().__init__(main); self.main = main; self.active = True; self.setWindowTitle(main.t('Администратор')); self.resize(1000,720)
+        super().__init__(main); self.main = main; self.active = True; self.setWindowTitle(main.t('Администратор'))
+        available = QApplication.primaryScreen().availableGeometry(); self.resize(min(1040, available.width() - 64), min(850, available.height() - 64)); self.setMinimumSize(min(600, available.width() - 64), min(500, available.height() - 64))
         self.draft_path = DATA_DIR / ('catalog-draft-qa.json' if main.smoke else 'catalog-draft.json')
         try: self.draft = validate_catalog(json.loads(self.draft_path.read_text(encoding='utf-8')))
-        except (OSError,ValueError): self.draft = copy.deepcopy(main.catalog.profile)
-        layout = QVBoxLayout(self); self.tabs = QTabWidget(); layout.addWidget(self.tabs); self.checks = {}; self.lists = {}
-        features = QWidget(); form = QVBoxLayout(features)
-        note = QLabel(main.t('Изменения общего профиля вступают в силу после успешной публикации.')); note.setWordWrap(True); form.addWidget(note)
-        for key,label in FEATURES.items():
-            check = QCheckBox(main.t(label)); check.setChecked(self.draft['features'][key]); self.checks[key] = check; form.addWidget(check)
-        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(features); self.tabs.addTab(scroll,main.t('Функции'))
-        for kind,label in (('apps','Приложения'),('keyboards','Клавиатуры')):
-            page = QWidget(); box = QVBoxLayout(page); listing = QListWidget(); self.lists[kind] = listing; box.addWidget(listing)
-            row = QHBoxLayout()
-            for title,method in [('Добавить',self.add_entry),('Изменить',self.edit_entry),('Удалить',self.remove_entry)]:
-                button = QPushButton(main.t(title)); button.clicked.connect(lambda checked=False,k=kind,m=method:m(k)); row.addWidget(button)
-            box.addLayout(row); self.tabs.addTab(page,main.t(label)); self.refresh_list(kind)
-        page = QWidget(); box = QFormLayout(page); self.repo = QLineEdit(main.catalog.config.get('repository','')); self.branch = QLineEdit(main.catalog.config.get('branch','')); self.branch.setPlaceholderText(main.t('Основная ветка репозитория')); self.catalog_path = QLineEdit(main.catalog.config.get('path','catalog.json'))
-        self.token = QLineEdit(); self.token.setEchoMode(QLineEdit.EchoMode.Password); self.token.setPlaceholderText(main.t('Сохраняется только в Windows Credential Manager'))
-        for title,widget in [('Репозиторий',self.repo),('Ветка',self.branch),('Путь JSON',self.catalog_path),('Токен Contents: write',self.token)]: box.addRow(main.t(title),widget)
-        for title,fn in [('Сохранить подключение и токен',self.configure),('Удалить сохранённый токен',self.forget_token),('Загрузить актуальный профиль',self.load_remote),('Опубликовать',self.publish)]:
-            button = QPushButton(main.t(title)); button.clicked.connect(fn); box.addRow(button)
-        self.tabs.addTab(page,main.t('GitHub и публикация')); self.status = QLabel(); self.status.setWordWrap(True); layout.addWidget(self.status)
-        row = QHBoxLayout(); save = QPushButton(main.t('Сохранить черновик')); save.clicked.connect(self.save_draft); row.addWidget(save); close = QPushButton(main.t('Закрыть')); close.clicked.connect(self.accept); row.addWidget(close); layout.addLayout(row)
+        except (OSError, ValueError): self.draft = copy.deepcopy(main.catalog.profile)
+        layout = QVBoxLayout(self); layout.setContentsMargins(24, 24, 24, 20); layout.setSpacing(16)
+        heading = QHBoxLayout(); icon = QLabel(); icon.setPixmap(ui_icon('shield').pixmap(32, 32)); heading.addWidget(icon); title = QLabel(main.t('Управление приложением')); title.setObjectName('section'); heading.addWidget(title, 1); layout.addLayout(heading)
+        note = QLabel(main.t('Изменения общего профиля вступают в силу после успешной публикации.')); note.setWordWrap(True); note.setObjectName('subtitle'); layout.addWidget(note)
+        self.tabs = QTabWidget(); layout.addWidget(self.tabs, 1); self.checks = {}; self.lists = {}; self.entry_details = {}; self.entry_buttons={}
+        features = QWidget(); form = QVBoxLayout(features); form.setContentsMargins(12, 16, 12, 16); form.setSpacing(16)
+        groups = [
+            ('Разделы приложения', ('catalog', 'installer', 'keyboards', 'inspector', 'files', 'apps', 'tweaks', 'terminal')),
+            ('Установка и файлы', ('apk.install', 'files.write', 'keyboard.install', 'keyboard.restore')),
+            ('Приложения и твики', ('apps.freeze', 'apps.clear', 'apps.uninstall', 'tweaks.dpi', 'tweaks.permissions', 'tweaks.network')),
+            ('Системные действия', ('device.root', 'device.reboot', 'repair.settings', 'repair.verity')),
+        ]
+        feature_help = {
+            'catalog':'Выбор и скачивание приложений из общего каталога.', 'installer':'Установка файлов, которые пользователь выбрал на компьютере.', 'keyboards':'Выбор комплектов для двух экранов и восстановление штатных клавиатур.', 'inspector':'Просмотр того, что открыто на экранах, и поиск событий кнопок.', 'files':'Просмотр памяти автомобиля и копирование файлов.', 'apps':'Просмотр установленных приложений и управление ими.', 'tweaks':'Настройки экрана, звука, сети и восстановление.', 'terminal':'Позволяет опытному пользователю вводить произвольные команды.',
+            'apk.install':'Разрешает все способы установки приложений, включая каталог и файлы на компьютере.', 'files.write':'Разрешает загрузку, удаление, создание папок и переименование файлов в машине.', 'keyboard.install':'Разрешает замену двух системных клавиатур из каталога.', 'keyboard.restore':'Разрешает возврат сохранённых штатных клавиатур.', 'apps.freeze':'Разрешает временно отключать приложения и включать их обратно.', 'apps.clear':'Разрешает удалять данные и настройки выбранного приложения.', 'apps.uninstall':'Разрешает удалять приложения из машины.', 'tweaks.dpi':'Разрешает менять размер текста и элементов экрана.', 'tweaks.permissions':'Разрешает менять доступ к микрофону, звуку и фоновой работе.', 'tweaks.network':'Разрешает настройки сети и верхней панели экрана.', 'device.root':'Разрешает пользователю самостоятельно включать расширенный системный доступ.', 'device.reboot':'Разрешает перезагрузку и системные сценарии с перезагрузкой.', 'repair.settings':'Разрешает пересоздание настроек автомобиля с предварительной копией.', 'repair.verity':'Разрешает отключить проверку системного раздела по процедуре установщика.'}
+        for group, keys in groups:
+            frame, box = self.admin_card(group)
+            for key in keys:
+                check = QCheckBox(main.t(FEATURES[key])); check.setChecked(self.draft['features'][key]); check.setToolTip(main.t(feature_help[key])); self.checks[key] = check; box.addWidget(check)
+            form.addWidget(frame)
+        form.addStretch(); scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame); scroll.setWidget(features); self.tabs.addTab(scroll, main.t('Функции'))
+        for kind, label in (('apps', 'Приложения'), ('keyboards', 'Клавиатуры')):
+            page = QWidget(); box = QVBoxLayout(page); box.setContentsMargins(12, 16, 12, 16); box.setSpacing(14)
+            description = QLabel(main.t('Соберите список приложений для пользователей.' if kind == 'apps' else 'Каждая запись содержит две ссылки: для центрального и пассажирского экранов.')); description.setObjectName('subtitle'); description.setWordWrap(True); box.addWidget(description)
+            row = QHBoxLayout(); row.setSpacing(10)
+            self.entry_buttons[kind]=[]
+            for title, method, icon_name in [('Добавить', self.add_entry, 'add'), ('Изменить', self.edit_entry, 'edit'), ('Удалить', self.remove_entry, 'delete')]:
+                button = QPushButton(main.t(title)); button.setIcon(ui_icon(icon_name)); button.clicked.connect(lambda checked=False, k=kind, m=method: m(k)); row.addWidget(button)
+                if title!='Добавить': self.entry_buttons[kind].append(button)
+            row.addStretch(); box.addLayout(row)
+            listing = QListWidget(); listing.setSpacing(6); listing.setWordWrap(True); self.lists[kind] = listing; box.addWidget(listing, 1)
+            detail = QLabel(); detail.setObjectName('subtitle'); detail.setWordWrap(True); detail.setTextFormat(Qt.TextFormat.PlainText); self.entry_details[kind] = detail; box.addWidget(detail)
+            listing.currentRowChanged.connect(lambda index, k=kind: self.show_entry_detail(k)); self.tabs.addTab(page, main.t(label)); self.refresh_list(kind)
+        page = QWidget(); contents = QVBoxLayout(page); contents.setContentsMargins(12, 16, 12, 16); contents.setSpacing(16)
+        connection, box = self.admin_card('Общий каталог на GitHub')
+        intro = QLabel(main.t('Пользователям не нужен пароль для чтения каталога. Для публикации нужен ваш токен с доступом к этому репозиторию.')); intro.setWordWrap(True); intro.setObjectName('subtitle'); box.addWidget(intro)
+        fields = QFormLayout(); fields.setSpacing(12); fields.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        self.repo = QLineEdit(main.catalog.config.get('repository', '')); self.repo.setPlaceholderText('owner/repository')
+        self.branch = QLineEdit(main.catalog.config.get('branch', '')); self.branch.setPlaceholderText(main.t('Основная ветка репозитория'))
+        self.catalog_path = QLineEdit(main.catalog.config.get('path', 'catalog.json'))
+        self.token = QLineEdit(); self.token.setEchoMode(QLineEdit.EchoMode.Password); self.token.setPlaceholderText(main.t('Сохраняется только в Windows Credential Manager')); self.token.setToolTip(main.t('Секрет для публикации. Хранится только на этом компьютере и не попадёт в каталог или сборку.'))
+        for title, widget in [('Репозиторий', self.repo), ('Ветка', self.branch), ('Путь JSON', self.catalog_path), ('Токен Contents: write', self.token)]: fields.addRow(main.t(title), widget)
+        box.addLayout(fields)
+        for title, fn, icon_name in [('Сохранить подключение и токен', self.configure, 'save'), ('Удалить сохранённый токен', self.forget_token, 'delete')]:
+            button = QPushButton(main.t(title)); button.setIcon(ui_icon(icon_name)); button.clicked.connect(fn); box.addWidget(button)
+        contents.addWidget(connection)
+        publication, box = self.admin_card('Публикация изменений')
+        note = QLabel(main.t('Сначала получите актуальный каталог, затем опубликуйте черновик. Если каталог изменил другой администратор, программа сохранит ваш черновик и сообщит о конфликте.')); note.setWordWrap(True); note.setObjectName('subtitle'); box.addWidget(note)
+        for title, fn, icon_name in [('Загрузить актуальный профиль', self.load_remote, 'download'), ('Опубликовать', self.publish, 'upload')]:
+            button = QPushButton(main.t(title)); button.setIcon(ui_icon(icon_name)); button.setProperty('accent', fn == self.publish); button.clicked.connect(fn); box.addWidget(button)
+        contents.addWidget(publication); contents.addStretch()
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.Shape.NoFrame); scroll.setWidget(page); self.tabs.addTab(scroll, main.t('GitHub и публикация'))
+        self.status = QLabel(); self.status.setWordWrap(True); layout.addWidget(self.status)
+        row = QHBoxLayout(); save = QPushButton(main.t('Сохранить черновик')); save.setIcon(ui_icon('save')); save.clicked.connect(self.save_draft); row.addWidget(save); row.addStretch(); close = QPushButton(main.t('Закрыть')); close.clicked.connect(self.accept); row.addWidget(close); layout.addLayout(row)
+
     def collect(self):
         self.draft['features'] = {key:check.isChecked() for key,check in self.checks.items()}; return validate_catalog(self.draft)
+
     def save_draft(self):
         try: atomic_json(self.draft_path,self.collect()); self.status.setText(self.main.t('Черновик сохранён'))
         except (OSError,ValueError) as error: self.status.setText(self.main.t(str(error)))
-    def refresh_list(self,kind):
-        self.lists[kind].clear()
-        for item in self.draft[kind]: self.lists[kind].addItem(item['name'] + ('  ·  ' + self.main.t('Отключено') if not item.get('enabled',True) else '') + '\n' + item['id'])
+
+    def refresh_list(self, kind):
+        listing = self.lists[kind]; old_row = listing.currentRow(); old_id = listing.currentItem().data(Qt.ItemDataRole.UserRole) if listing.currentItem() else ''
+        listing.blockSignals(True); listing.clear()
+        for entry in self.draft[kind]:
+            text = entry['name'] + ('  ·  ' + self.main.t('Отключено') if not entry.get('enabled', True) else '')
+            item = QListWidgetItem(ui_icon('apps' if kind == 'apps' else 'keyboard'), text + '\n' + entry.get('description', ''))
+            item.setData(Qt.ItemDataRole.UserRole, entry['id']); item.setToolTip(entry['id']); item.setSizeHint(QSize(300, 70)); listing.addItem(item)
+        chosen = next((i for i, entry in enumerate(self.draft[kind]) if entry['id'] == old_id), min(old_row, len(self.draft[kind]) - 1))
+        listing.setCurrentRow(chosen); listing.blockSignals(False); self.show_entry_detail(kind)
+
     def add_entry(self,kind): self.edit_entry(kind,True)
+
     def edit_entry(self,kind,new=False):
         index = self.lists[kind].currentRow()
         if not new and index < 0: return
@@ -3185,9 +4416,11 @@ class AdminDialog(QDialog):
             if new: self.draft[kind].append(editor.value())
             else: self.draft[kind][index] = editor.value()
             self.refresh_list(kind); self.save_draft()
+
     def remove_entry(self,kind):
         row = self.lists[kind].currentRow()
         if row >= 0 and self.main.confirm(self.main.t('Удалить запись каталога?')): self.draft[kind].pop(row); self.refresh_list(kind); self.save_draft()
+
     def configure(self):
         try:
             repo = github_repository(self.repo.text()); config = {'repository':repo,'branch':self.branch.text().strip(),'path':self.catalog_path.text().strip() or 'catalog.json'}
@@ -3196,9 +4429,11 @@ class AdminDialog(QDialog):
             if self.token.text(): CredentialStore.write(repo,self.token.text().strip()); self.token.clear()
             self.status.setText(self.main.t('Настройки сохранены')); self.main.catalog.refresh()
         except (OSError,ValueError) as error: self.status.setText(self.main.t(str(error)))
+
     def forget_token(self):
         try: CredentialStore.delete(github_repository(self.repo.text())); self.token.clear(); self.status.setText(self.main.t('Токен удалён'))
         except (OSError,ValueError) as error: self.status.setText(str(error))
+
     def load_remote(self):
         def loaded(result):
             if not self.active: return
@@ -3211,13 +4446,27 @@ class AdminDialog(QDialog):
                 for kind in self.lists: self.refresh_list(kind)
                 self.save_draft()
         self.main.catalog.etag = ''; self.main.catalog.refresh(loaded)
+
     def publish(self):
         try:
             profile = self.collect(); profile['revision'] = max(profile['revision'],self.main.catalog.profile['revision']) + 1; atomic_json(self.draft_path,profile)
             self.main.catalog.publish(profile,lambda ok,message:self.status.setText(self.main.t(message)) if self.active else self.main.notice(self.main.t(message)))
         except (OSError,ValueError) as error: self.status.setText(str(error))
+
     def done(self,result):
         self.save_draft(); self.token.clear(); self.active = False; super().done(result)
+
+    def admin_card(self, title):
+        frame = QFrame(); frame.setObjectName('card'); box = QVBoxLayout(frame); box.setContentsMargins(18, 16, 18, 16); box.setSpacing(12)
+        label = QLabel(self.main.t(title)); label.setObjectName('section'); box.addWidget(label); return frame, box
+
+    def show_entry_detail(self, kind):
+        if kind not in self.entry_details: return
+        row = self.lists[kind].currentRow()
+        for button in self.entry_buttons.get(kind,[]): button.setEnabled(0<=row<len(self.draft[kind]))
+        if 0 <= row < len(self.draft[kind]):
+            entry = self.draft[kind][row]; self.entry_details[kind].setText(entry.get('description', '') + '\nID: ' + entry['id'])
+        else: self.entry_details[kind].setText(self.main.t('Выберите запись для изменения или добавьте новую.'))
 
 def setup_logging():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -3270,7 +4519,7 @@ def main():
             for language in (0,1):
                 window.language.setCurrentIndex(language)
                 for i in range(len(window.pages)):
-                    window.sidebar.setCurrentRow(i); QApplication.processEvents(); window.grab().save(str(args.smoke_dir / f'tab-{i + 1}-{window.lang}.png'))
+                    window.select_section(list(window.pages)[i]); QApplication.processEvents(); QApplication.processEvents(); QApplication.processEvents(); window.grab().save(str(args.smoke_dir / f'tab-{i + 1}-{window.lang}.png'))
             inspector = window.pages['inspector']; window.select_section('inspector')
             for i in range(inspector.sections.count()):
                 inspector.sections.setCurrentIndex(i); QApplication.processEvents(); window.grab().save(str(args.smoke_dir/f'inspector-{i+1}.png'))
@@ -3278,7 +4527,7 @@ def main():
             for i in range(admin.tabs.count()):
                 admin.tabs.setCurrentIndex(i); QApplication.processEvents(); admin.grab().save(str(args.smoke_dir/f'admin-{i+1}.png'))
             admin.reject(); admin.deleteLater()
-            window.connection_details.show(); QApplication.processEvents(); window.grab().save(str(args.smoke_dir/'connection-settings.png')); window.connection_details.hide()
+            window.connection_disclosure.setExpanded(True,False); QApplication.processEvents(); window.grab().save(str(args.smoke_dir/'connection-settings.png')); window.connection_disclosure.setExpanded(False,False)
             window.select_section('tweaks'); QApplication.processEvents(); window.stack.currentWidget().verticalScrollBar().setValue(window.stack.currentWidget().verticalScrollBar().maximum()); QApplication.processEvents(); window.grab().save(str(args.smoke_dir/'recovery.png'))
             try: build_manifest = json.loads((RESOURCE_DIR/'build_manifest.json').read_text(encoding='utf-8'))
             except (OSError,ValueError): build_manifest = {}

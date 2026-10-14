@@ -163,9 +163,9 @@ def window(qtbot,monkeypatch,tmp_path):
 
 def test_ui_all_tabs_and_live_language(window, qtbot):
     assert window.stack.count() == 8
-    window.language.setCurrentIndex(1); assert window.section_items['inspector'].toolTip() == 'Inspector'
-    assert window.pages['installer'].flags[0].text() == 'Reinstall (-r)'
-    window.language.setCurrentIndex(0); assert window.section_items['tweaks'].toolTip() == 'Твики'
+    window.language.setCurrentIndex(1); assert window.section_items['inspector'].toolTip() == v.EN[v.SECTION_HELP['inspector']]
+    assert window.pages['installer'].flags[0].text() == 'Keep app data when reinstalling'
+    window.language.setCurrentIndex(0); assert window.section_items['tweaks'].toolTip() == v.SECTION_HELP['tweaks']
     window.resize(1080, 760); qtbot.wait(100)
     assert window.width() <= 1150
 
